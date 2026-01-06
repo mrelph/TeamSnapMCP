@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+.env.local
+.env.*
+!.env.example
+lambda.zip
+*.zip
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db

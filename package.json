@@ -1,0 +1,44 @@
+{
+  "name": "@teamsnap/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for TeamSnap - access your teams, rosters, and events from Claude",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "teamsnap-mcp": "dist/index.js",
+    "teamsnap-mcp-wrapper": "dist/wrapper.js",
+    "teamsnap-mcp-init": "dist/cli/init.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "teamsnap",
+    "claude",
+    "model-context-protocol",
+    "sports",
+    "teams"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^17.2.3",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "teamsnap-mcp-aws",
+  "version": "0.1.0",
+  "description": "AWS-hosted TeamSnap MCP Server",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/lambda.ts --bundle --platform=node --target=node20 --outfile=dist/lambda.js --format=cjs --external:@aws-sdk/*",
+    "deploy": "node scripts/deploy.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewayv2": "^3.700.0",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/client-iam": "^3.700.0",
+    "@aws-sdk/client-lambda": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
+  }
+}
