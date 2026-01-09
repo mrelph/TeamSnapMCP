@@ -189,7 +189,8 @@ async function handleToolCall(name, args) {
   try {
     switch (name) {
       case "teamsnap_list_teams": {
-        const data = await teamsnapRequest("/teams", tokens);
+        const userId = tokens.teamsnapUserId;
+        const data = await teamsnapRequest(`/teams/search?user_id=${userId}`, tokens);
         const teams = parseCollectionItems(data).map(t => ({
           id: t.id,
           name: t.name,

@@ -139,7 +139,14 @@ export class TeamSnapClient {
   }
 
   async getTeams(): Promise<Record<string, unknown>[]> {
-    const data = await this.request<CollectionResponse>("/teams");
+    // Get user ID from credentials or fetch from /me
+    let userId = this.credentials?.teamsnapUserId;
+    if (!userId) {
+      const me = await this.getMe();
+      userId = String(me.id);
+    }
+
+    const data = await this.request<CollectionResponse>(`/teams/search?user_id=${userId}`);
     return (data.collection.items || []).map(parseCollectionItem);
   }
 
