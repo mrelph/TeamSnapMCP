@@ -3,6 +3,7 @@ dist/
 *.log
 .DS_Store
 .env
+.mcp.json
 .env.local
 .env.*
 !.env.example

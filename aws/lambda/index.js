@@ -381,6 +381,48 @@ export async function handler(event) {
     };
   }
 
+  // JSON-RPC MCP endpoint (for wrapper)
+  if (method === "POST" && (path === "/" || path === "/mcp")) {
+    try {
+      const body = JSON.parse(event.body || "{}");
+      const { jsonrpc, id, method: rpcMethod, params } = body;
+
+      if (rpcMethod === "tools/list") {
+        return {
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id, result: { tools } }),
+        };
+      }
+
+      if (rpcMethod === "tools/call") {
+        const { name, arguments: args } = params || {};
+        const result = await handleToolCall(name, args || {});
+        return {
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            result: { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] },
+          }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } }),
+      };
+    } catch (err) {
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }),
+      };
+    }
+  }
+
   // Health check / info
   if (path === "/" && method === "GET") {
     const tokens = await getTokens(DEFAULT_USER_ID);
@@ -396,6 +438,7 @@ export async function handler(event) {
           callback: "/callback",
           tools: "/mcp/tools",
           call: "/mcp/call",
+          jsonrpc: "/ (POST)",
         },
       }),
     };
