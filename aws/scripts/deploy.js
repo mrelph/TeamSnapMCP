@@ -1,17 +1,10 @@
-import DynamoDBPkg from "@aws-sdk/client-dynamodb";
-const { DynamoDBClient, CreateTableCommand, DescribeTableCommand, ResourceNotFoundException } = DynamoDBPkg;
-
-import IAMPkg from "@aws-sdk/client-iam";
-const { IAMClient, CreateRoleCommand, PutRolePolicyCommand, GetRoleCommand } = IAMPkg;
-
-import LambdaPkg from "@aws-sdk/client-lambda";
-const { LambdaClient, CreateFunctionCommand, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand, GetFunctionCommand, AddPermissionCommand } = LambdaPkg;
-const LambdaResourceNotFoundException = LambdaPkg.ResourceNotFoundException;
-
-import APIGatewayPkg from "@aws-sdk/client-apigatewayv2";
-const { APIGatewayV2Client, CreateApiCommand, CreateStageCommand, CreateIntegrationCommand, CreateRouteCommand, GetApisCommand, GetIntegrationsCommand, GetRoutesCommand } = APIGatewayPkg;
-import { readFileSync } from "fs";
+import { DynamoDBClient, CreateTableCommand, DescribeTableCommand, ResourceNotFoundException } from "@aws-sdk/client-dynamodb";
+import { IAMClient, CreateRoleCommand, PutRolePolicyCommand, GetRoleCommand } from "@aws-sdk/client-iam";
+import { LambdaClient, CreateFunctionCommand, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand, GetFunctionCommand, AddPermissionCommand, ResourceNotFoundException as LambdaResourceNotFoundException } from "@aws-sdk/client-lambda";
+import { ApiGatewayV2Client, CreateApiCommand, CreateStageCommand, CreateIntegrationCommand, CreateRouteCommand, GetApisCommand, GetIntegrationsCommand, GetRoutesCommand } from "@aws-sdk/client-apigatewayv2";
+import { readFileSync, createWriteStream } from "fs";
 import { execSync } from "child_process";
+import archiver from "archiver";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -27,7 +20,7 @@ const API_NAME = "teamsnap-mcp-api";
 const dynamodb = new DynamoDBClient({ region: REGION });
 const iam = new IAMClient({ region: REGION });
 const lambda = new LambdaClient({ region: REGION });
-const apigateway = new APIGatewayV2Client({ region: REGION });
+const apigateway = new ApiGatewayV2Client({ region: REGION });
 
 async function createDynamoDBTable() {
   console.log("Creating DynamoDB table...");
@@ -120,8 +113,19 @@ async function buildLambda() {
   console.log("Building Lambda...");
   execSync("npm run build", { cwd: PROJECT_ROOT, stdio: "inherit" });
 
-  // Create zip
-  execSync("cd dist && zip -r ../lambda.zip lambda.js", { cwd: PROJECT_ROOT, stdio: "inherit" });
+  // Create zip using archiver
+  console.log("  Creating zip...");
+  await new Promise((resolve, reject) => {
+    const output = createWriteStream(join(PROJECT_ROOT, "lambda.zip"));
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    output.on("close", resolve);
+    archive.on("error", reject);
+
+    archive.pipe(output);
+    archive.file(join(PROJECT_ROOT, "dist/lambda.js"), { name: "lambda.js" });
+    archive.finalize();
+  });
   console.log("  Build complete");
 }
 
