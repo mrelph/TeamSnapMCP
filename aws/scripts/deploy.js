@@ -1,12 +1,15 @@
-import { DynamoDBClient, CreateTableCommand, DescribeTableCommand, ResourceNotFoundException } from "@aws-sdk/client-dynamodb";
-import { IAMClient, CreateRoleCommand, PutRolePolicyCommand, GetRoleCommand } from "@aws-sdk/client-iam";
-import { LambdaClient, CreateFunctionCommand, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand, GetFunctionCommand, AddPermissionCommand, ResourceNotFoundException as LambdaResourceNotFoundException } from "@aws-sdk/client-lambda";
-import { ApiGatewayV2Client, CreateApiCommand, CreateStageCommand, CreateIntegrationCommand, CreateRouteCommand, GetApisCommand, GetIntegrationsCommand, GetRoutesCommand } from "@aws-sdk/client-apigatewayv2";
+import { createRequire } from "module";
 import { readFileSync, createWriteStream } from "fs";
 import { execSync } from "child_process";
 import archiver from "archiver";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+
+const require = createRequire(import.meta.url);
+const { DynamoDBClient, CreateTableCommand, DescribeTableCommand, ResourceNotFoundException } = require("@aws-sdk/client-dynamodb");
+const { IAMClient, CreateRoleCommand, PutRolePolicyCommand, GetRoleCommand } = require("@aws-sdk/client-iam");
+const { LambdaClient, CreateFunctionCommand, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand, GetFunctionCommand, AddPermissionCommand, ResourceNotFoundException: LambdaResourceNotFoundException } = require("@aws-sdk/client-lambda");
+const { ApiGatewayV2Client, CreateApiCommand, CreateStageCommand, CreateIntegrationCommand, CreateRouteCommand, GetApisCommand, GetIntegrationsCommand, GetRoutesCommand } = require("@aws-sdk/client-apigatewayv2");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, "..");
@@ -35,8 +38,8 @@ async function createDynamoDBTable() {
 
   await dynamodb.send(new CreateTableCommand({
     TableName: TABLE_NAME,
-    KeySchema: [{ AttributeName: "pk", KeyType: "HASH" }],
-    AttributeDefinitions: [{ AttributeName: "pk", AttributeType: "S" }],
+    KeySchema: [{ AttributeName: "userId", KeyType: "HASH" }],
+    AttributeDefinitions: [{ AttributeName: "userId", AttributeType: "S" }],
     BillingMode: "PAY_PER_REQUEST",
     TimeToLiveSpecification: { Enabled: true, AttributeName: "ttl" },
   }));

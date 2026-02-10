@@ -87,7 +87,7 @@ export class TeamSnapClient {
       };
 
       await saveCredentials(updated);
-      this.credentials = { ...updated, pk: "user#default", createdAt: this.credentials.createdAt, updatedAt: Date.now() };
+      this.credentials = { ...updated, userId: "user#default", createdAt: this.credentials.createdAt, updatedAt: Date.now() };
       return true;
     } catch {
       return false;
