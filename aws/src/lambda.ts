@@ -343,11 +343,32 @@ async function handleCallback(event: APIGatewayProxyEventV2): Promise<APIGateway
   }
 }
 
-// MCP JSON-RPC handler
+// MCP JSON-RPC handler (supports Streamable HTTP transport)
 async function handleMCP(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const httpMethod = event.requestContext.http.method;
+
+  // DELETE = session cleanup
+  if (httpMethod === "DELETE") {
+    return { statusCode: 200, body: "" };
+  }
+
+  // GET = SSE stream (not supported in Lambda, return 405)
+  if (httpMethod === "GET") {
+    return { statusCode: 405, body: "SSE not supported" };
+  }
+
   const body = JSON.parse(event.body || "{}");
   const { method, params, id } = body;
   const baseUrl = getBaseUrl(event);
+
+  const mcpHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  // Notifications have no id — acknowledge with 204
+  if (id === undefined || id === null) {
+    return { statusCode: 204, headers: mcpHeaders, body: "" };
+  }
 
   let result: unknown;
 
@@ -371,14 +392,14 @@ async function handleMCP(event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
     default:
       return {
         statusCode: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: mcpHeaders,
         body: JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } }),
       };
   }
 
   return {
     statusCode: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: mcpHeaders,
     body: JSON.stringify({ jsonrpc: "2.0", id, result }),
   };
 }
@@ -397,8 +418,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     return handleCallback(event);
   }
 
-  // MCP endpoint
-  if (path === "/mcp" && event.requestContext.http.method === "POST") {
+  // MCP endpoint (POST = JSON-RPC, DELETE = session cleanup)
+  if (path === "/mcp" && (event.requestContext.http.method === "POST" || event.requestContext.http.method === "DELETE")) {
     return handleMCP(event);
   }
 

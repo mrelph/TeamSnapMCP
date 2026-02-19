@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Local MCP wrapper that forwards requests to the AWS-hosted TeamSnap MCP server.
- * This allows Claude Desktop to use the remote MCP via stdio transport.
+ * Local MCP stdio bridge for the AWS-hosted TeamSnap MCP server.
+ * Allows Claude Desktop to use the remote MCP via: npx -y teamsnap-mcp
  *
- * Includes retry logic and error handling to survive Lambda cold starts
- * and transient network failures without crashing.
+ * Requires TEAMSNAP_MCP_ENDPOINT env var pointing to the API Gateway URL.
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -91,7 +90,7 @@ async function callRemoteMCP(method: string, params?: unknown): Promise<unknown>
 
 const server = new Server(
   {
-    name: "teamsnap-mcp-wrapper",
+    name: "teamsnap-mcp",
     version: "0.1.0",
   },
   {
@@ -101,19 +100,16 @@ const server = new Server(
   }
 );
 
-// Forward tools/list to remote
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   try {
     const result = await callRemoteMCP("tools/list") as { tools: unknown[] };
     return result;
   } catch (error) {
     console.error("tools/list failed after retries:", error);
-    // Return empty tools list so the server stays alive
     return { tools: [] };
   }
 });
 
-// Forward tools/call to remote
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   try {
@@ -121,7 +117,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return result as { content: Array<{ type: string; text: string }> };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // Return the error as tool content instead of crashing
     return {
       content: [{ type: "text", text: `Error calling ${name}: ${message}. The remote server may be temporarily unavailable — please try again.` }],
       isError: true,
@@ -132,7 +127,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("TeamSnap MCP wrapper connected to:", AWS_MCP_ENDPOINT);
+  console.error("TeamSnap MCP bridge connected to:", AWS_MCP_ENDPOINT);
 }
 
 main().catch((error) => {

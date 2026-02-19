@@ -1,0 +1,36 @@
+{
+  "name": "teamsnap-mcp",
+  "version": "0.1.0",
+  "description": "Local stdio bridge for the TeamSnap MCP server on AWS Lambda — use with Claude Desktop via npx",
+  "type": "module",
+  "bin": {
+    "teamsnap-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "teamsnap",
+    "claude",
+    "model-context-protocol",
+    "sports",
+    "teams"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

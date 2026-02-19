@@ -208,7 +208,7 @@ async function createAPIGateway(lambdaArn) {
 
   // Create routes
   const { Items: routes } = await apigateway.send(new GetRoutesCommand({ ApiId: apiId }));
-  const routeKeys = ["GET /", "GET /callback", "POST /mcp", "GET /health"];
+  const routeKeys = ["GET /", "GET /callback", "POST /mcp", "DELETE /mcp", "GET /health"];
 
   for (const routeKey of routeKeys) {
     if (!routes?.find(r => r.RouteKey === routeKey)) {
