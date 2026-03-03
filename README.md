@@ -1,15 +1,20 @@
 # TeamSnap MCP Server
 
-A Model Context Protocol (MCP) server that connects Claude to your TeamSnap account. Access your teams, rosters, events, and availability data directly from Claude Desktop or CLI.
+A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that connects Claude to your TeamSnap account. Access your teams, rosters, events, and availability data directly from Claude Desktop or CLI.
 
 ## Features
 
-- **Teams**: List and view all your TeamSnap teams
-- **Rosters**: Get player and coach information
-- **Events**: View games, practices, and other events
-- **Availability**: Check who's available for events
-- **Secure**: OAuth 2.0 authentication with encrypted token storage
-- **AWS Deployment**: Optional serverless deployment with permanent HTTPS callback URL
+- **Teams** — List and view all your TeamSnap teams
+- **Rosters** — Get player and coach information
+- **Events** — View games, practices, and other events with date filtering
+- **Availability** — Check who's available for events
+- **Secure** — OAuth 2.0 with AES-256-GCM encrypted local storage or DynamoDB
+- **Flexible Deployment** — Run locally, via npx, or on AWS Lambda
+
+## Prerequisites
+
+- Node.js >= 18
+- A [TeamSnap Developer](https://developer.teamsnap.com) OAuth application (Client ID + Secret)
 
 ## Quick Start
 
@@ -17,18 +22,19 @@ A Model Context Protocol (MCP) server that connects Claude to your TeamSnap acco
 
 1. Go to [TeamSnap Developer Portal](https://developer.teamsnap.com)
 2. Create a new application
-3. Set the redirect URI (see options below)
-4. Note your Client ID and Client Secret
+3. Set the redirect URI (see deployment options below)
+4. Note your **Client ID** and **Client Secret**
 
 ### 2. Choose Your Deployment
 
 #### Option A: Local MCP Server
 
-For local development with a tunnel for OAuth callback.
+Best for development. Requires a tunnel (e.g., Cloudflare) for the OAuth callback.
 
 ```bash
-git clone https://github.com/yourusername/TeamSnapMCP.git
+git clone https://github.com/mrelph/TeamSnapMCP.git
 cd TeamSnapMCP
+cp .env.example .env   # Add your credentials
 npm install
 npm run build
 ```
@@ -51,11 +57,29 @@ Add to Claude Desktop config (`~/Library/Application Support/Claude/claude_deskt
 }
 ```
 
-**Redirect URI**: Use a tunnel like `cloudflared tunnel --url http://localhost:8374` for HTTPS callback.
+> **Tip:** Use `cloudflared tunnel --url http://localhost:8374` to create an HTTPS callback URL.
 
-#### Option B: AWS Serverless (Recommended)
+#### Option B: npx (Connects to AWS Deployment)
 
-Deploy to AWS Lambda for a permanent HTTPS callback URL with no tunnels needed.
+Easiest option if the AWS backend is already deployed. No local clone needed.
+
+```json
+{
+  "mcpServers": {
+    "teamsnap": {
+      "command": "npx",
+      "args": ["-y", "teamsnap-mcp"],
+      "env": {
+        "TEAMSNAP_MCP_ENDPOINT": "https://your-api-id.execute-api.us-east-1.amazonaws.com/mcp"
+      }
+    }
+  }
+}
+```
+
+#### Option C: AWS Serverless
+
+Deploy to AWS Lambda for a permanent HTTPS callback URL — no tunnels needed.
 
 ```bash
 cd aws
@@ -63,25 +87,27 @@ npm install
 ```
 
 Set environment variables:
+
 ```bash
 export AWS_ACCESS_KEY_ID=your-aws-key
 export AWS_SECRET_ACCESS_KEY=your-aws-secret
-export AWS_REGION=us-west-2
+export AWS_REGION=us-east-1
 export TEAMSNAP_CLIENT_ID=your-client-id
 export TEAMSNAP_CLIENT_SECRET=your-client-secret
 ```
 
 Deploy:
+
 ```bash
 node scripts/deploy.cjs
 ```
 
 This creates:
-- API Gateway with permanent HTTPS URL
-- Lambda function for MCP server
-- DynamoDB table for token storage
+- **API Gateway** — Permanent HTTPS endpoint
+- **Lambda** — MCP server (Node.js 20, 256MB, 30s timeout)
+- **DynamoDB** — Token storage with TTL auto-cleanup
 
-Then use the **wrapper** for Claude Desktop:
+Then configure Claude Desktop to use the **wrapper**:
 
 ```json
 {
@@ -90,7 +116,7 @@ Then use the **wrapper** for Claude Desktop:
       "command": "node",
       "args": ["/path/to/TeamSnapMCP/dist/wrapper.js"],
       "env": {
-        "TEAMSNAP_MCP_ENDPOINT": "https://your-api-id.execute-api.us-west-2.amazonaws.com/mcp"
+        "TEAMSNAP_MCP_ENDPOINT": "https://your-api-id.execute-api.us-east-1.amazonaws.com/mcp"
       }
     }
   }
@@ -101,21 +127,21 @@ Then use the **wrapper** for Claude Desktop:
 
 Tell Claude: **"Connect to TeamSnap"**
 
-A browser will open for OAuth login. Once complete, you're connected!
+A browser window will open for OAuth login. Once you authorize, you're connected.
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `teamsnap_auth` | Connect to TeamSnap |
-| `teamsnap_auth_status` | Check connection status |
-| `teamsnap_logout` | Disconnect from TeamSnap |
-| `teamsnap_list_teams` | List all your teams |
-| `teamsnap_get_team` | Get team details |
-| `teamsnap_get_roster` | Get players and coaches |
-| `teamsnap_get_events` | Get team events |
-| `teamsnap_get_event` | Get event details |
-| `teamsnap_get_availability` | Get event availability |
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `teamsnap_auth` | Connect to TeamSnap via OAuth | `client_id?`, `client_secret?` |
+| `teamsnap_auth_status` | Check connection status | — |
+| `teamsnap_logout` | Disconnect and clear credentials | — |
+| `teamsnap_list_teams` | List all your teams | — |
+| `teamsnap_get_team` | Get team details | `team_id` |
+| `teamsnap_get_roster` | Get players and coaches | `team_id` |
+| `teamsnap_get_events` | Get team events | `team_id`, `start_date?`, `end_date?` |
+| `teamsnap_get_event` | Get event details | `event_id` |
+| `teamsnap_get_availability` | Get event availability | `event_id` |
 
 ## Example Prompts
 
@@ -127,42 +153,60 @@ A browser will open for OAuth login. Once complete, you're connected!
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    AWS (Optional)                           │
-│  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐ │
-│  │ API Gateway  │───▶│   Lambda     │───▶│   DynamoDB    │ │
-│  │   (HTTPS)    │    │ (MCP Server) │    │   (Tokens)    │ │
-│  └──────────────┘    └──────────────┘    └───────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-         ▲
-         │ HTTP/SSE
-         ▼
-   ┌───────────┐         ┌───────────────┐
-   │  Wrapper  │◀───────▶│ Claude Desktop│
-   │  (stdio)  │         │               │
-   └───────────┘         └───────────────┘
+Local Deployment:
+
+  Claude Desktop ◄──stdio──► MCP Server (Node.js)
+                                   │
+                              TeamSnap API
+                                   │
+                         localhost:8374 (OAuth callback)
+
+
+AWS Deployment:
+
+  Claude Desktop ◄──stdio──► Wrapper ──HTTPS──► API Gateway
+                                                     │
+                                                  Lambda
+                                                  │     │
+                                            DynamoDB   TeamSnap API
 ```
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `TEAMSNAP_CLIENT_ID` | Yes | — | OAuth Client ID |
+| `TEAMSNAP_CLIENT_SECRET` | Yes | — | OAuth Client Secret |
+| `TEAMSNAP_CALLBACK_PORT` | No | `8374` | Local OAuth callback port |
+| `TEAMSNAP_REDIRECT_URI` | No | — | Override redirect URI (for tunnels) |
+| `TEAMSNAP_MCP_ENDPOINT` | AWS only | — | API Gateway endpoint URL |
 
 ## Security
 
-- OAuth tokens encrypted with AES-256-GCM (local) or stored in DynamoDB (AWS)
-- Only read access requested from TeamSnap
-- No credentials stored in code
+- **Encryption** — Local tokens encrypted with AES-256-GCM (scrypt key derivation)
+- **Read-only** — Only `read` scope requested from TeamSnap
+- **No hardcoded credentials** — All secrets loaded from environment variables
+- **CSRF protection** — OAuth state parameter validation
+- **Auto-cleanup** — DynamoDB TTL removes stale pending auth after 10 minutes
+- **File permissions** — Local credentials saved with `0600` (owner-only)
 
 ## Development
 
 ```bash
-# Install dependencies
+npm install       # Install dependencies
+npm run build     # Compile TypeScript
+npm run dev       # Watch mode
+node dist/index.js      # Run local server
+node dist/wrapper.js    # Run AWS wrapper
+```
+
+### AWS deployment
+
+```bash
+cd aws
 npm install
-
-# Build
-npm run build
-
-# Run locally
-node dist/index.js
-
-# Run wrapper (connects to AWS)
-node dist/wrapper.js
+npm run build           # Bundle with esbuild
+node scripts/deploy.cjs # Deploy to AWS
 ```
 
 ## License
