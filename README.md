@@ -7,7 +7,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that co
 - **Teams** — List and view all your TeamSnap teams
 - **Rosters** — Get player and coach information
 - **Events** — View games, practices, and other events with date filtering
-- **Availability** — Check who's available for events
+- **Availability** — Check who's available for events, with correct handling of all RSVP states including numeric status codes
 - **Secure** — OAuth 2.0 with AES-256-GCM encrypted local storage or DynamoDB
 - **Flexible Deployment** — Run locally, via npx, or on AWS Lambda
 
@@ -141,7 +141,20 @@ A browser window will open for OAuth login. Once you authorize, you're connected
 | `teamsnap_get_roster` | Get players and coaches | `team_id` |
 | `teamsnap_get_events` | Get team events | `team_id`, `start_date?`, `end_date?` |
 | `teamsnap_get_event` | Get event details | `event_id` |
-| `teamsnap_get_availability` | Get event availability | `event_id` |
+| `teamsnap_get_availability` | Get event RSVP status for all members | `event_id` |
+
+### Availability Status Codes
+
+The `teamsnap_get_availability` tool groups members into four categories based on the TeamSnap `status_code` field returned by the API:
+
+| Status | Numeric code | String code | Meaning |
+|--------|-------------|-------------|---------|
+| `yes` | `1` | `"yes"` | Member marked as available |
+| `no` | `0` | `"no"` | Member declined (not attending) |
+| `maybe` | `2` | `"maybe"` | Member is uncertain |
+| `noResponse` | null/absent | — | Member has not responded |
+
+> **Note:** The numeric code `0` for "declined" is a falsy value in JavaScript. The server uses nullish coalescing (`??`) rather than the logical OR (`||`) operator when reading `status_code` to ensure that a numeric `0` is correctly categorized as "no" rather than silently falling through to "no response".
 
 ## Example Prompts
 
@@ -149,25 +162,26 @@ A browser window will open for OAuth login. Once you authorize, you're connected
 - "Show me the roster for the Jr Kraken"
 - "What games do we have scheduled this month?"
 - "Who's available for Saturday's game?"
+- "Who has declined Saturday's game?"
 
 ## Architecture
 
 ```
 Local Deployment:
 
-  Claude Desktop ◄──stdio──► MCP Server (Node.js)
-                                   │
+  Claude Desktop <--stdio--> MCP Server (Node.js)
+                                   |
                               TeamSnap API
-                                   │
+                                   |
                          localhost:8374 (OAuth callback)
 
 
 AWS Deployment:
 
-  Claude Desktop ◄──stdio──► Wrapper ──HTTPS──► API Gateway
-                                                     │
+  Claude Desktop <--stdio--> Wrapper --HTTPS--> API Gateway
+                                                     |
                                                   Lambda
-                                                  │     │
+                                                  |     |
                                             DynamoDB   TeamSnap API
 ```
 
@@ -175,11 +189,11 @@ AWS Deployment:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `TEAMSNAP_CLIENT_ID` | Yes | — | OAuth Client ID |
-| `TEAMSNAP_CLIENT_SECRET` | Yes | — | OAuth Client Secret |
+| `TEAMSNAP_CLIENT_ID` | Yes (local) | — | OAuth Client ID |
+| `TEAMSNAP_CLIENT_SECRET` | Yes (local) | — | OAuth Client Secret |
 | `TEAMSNAP_CALLBACK_PORT` | No | `8374` | Local OAuth callback port |
 | `TEAMSNAP_REDIRECT_URI` | No | — | Override redirect URI (for tunnels) |
-| `TEAMSNAP_MCP_ENDPOINT` | AWS only | — | API Gateway endpoint URL |
+| `TEAMSNAP_MCP_ENDPOINT` | AWS wrapper only | — | API Gateway endpoint URL |
 
 ## Security
 

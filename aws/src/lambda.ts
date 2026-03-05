@@ -211,7 +211,7 @@ async function handleTool(name: string, args: Record<string, unknown>, baseUrl: 
       const avails = await client.getAvailabilities(args.event_id as string);
       const grouped = { yes: [] as unknown[], no: [] as unknown[], maybe: [] as unknown[], noResponse: [] as unknown[] };
       for (const a of avails) {
-        const status = String(a.status_code || "").toLowerCase();
+        const status = String(a.status_code ?? "").toLowerCase();
         const entry = { memberId: a.member_id, notes: a.notes };
         if (status === "yes" || status === "1") grouped.yes.push(entry);
         else if (status === "no" || status === "0") grouped.no.push(entry);

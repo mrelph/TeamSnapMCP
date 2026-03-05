@@ -1,7 +1,7 @@
 {
   "name": "@teamsnap/mcp-server",
   "version": "0.1.0",
-  "description": "MCP server for TeamSnap - access your teams, rosters, and events from Claude",
+  "description": "MCP server for TeamSnap - access your teams, rosters, events, and availability from Claude",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

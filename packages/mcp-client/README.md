@@ -32,6 +32,14 @@ Restart Claude Desktop. The bridge connects automatically.
 
 `teamsnap-mcp` runs as a local stdio MCP server. It receives JSON-RPC requests from Claude Desktop over stdin, forwards them to your AWS Lambda endpoint via HTTPS, and pipes responses back over stdout. Includes automatic retry logic (3 attempts with exponential backoff) to handle Lambda cold starts and transient failures.
 
+### Authentication in AWS Mode
+
+Because there is no local process to open a browser window, the `teamsnap_auth` tool in AWS mode returns a URL for you to open manually. After visiting the URL and completing the OAuth flow, use `teamsnap_auth_status` to confirm the connection.
+
+### Availability / RSVP Data
+
+The `teamsnap_get_availability` tool returns member RSVP status grouped into four buckets: `yes`, `no`, `maybe`, and `noResponse`. TeamSnap represents a declined response with the numeric status code `0`. The server correctly handles this using nullish coalescing so that a numeric `0` is categorized as "no" rather than "no response".
+
 ## Related
 
 - [TeamSnap MCP Server](https://github.com/mrelph/TeamSnapMCP) — Full project with local and AWS deployment options
