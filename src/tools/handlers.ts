@@ -315,7 +315,7 @@ async function handleGetAvailability(args: ToolArgs): Promise<CallToolResult> {
     };
 
     for (const a of availabilities) {
-      const status = String(a.status_code || "").toLowerCase();
+      const status = String(a.status_code ?? "").toLowerCase();
       const entry = { memberId: a.member_id, notes: a.notes };
 
       if (status === "yes" || status === "1") {
