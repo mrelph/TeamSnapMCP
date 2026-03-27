@@ -17,6 +17,25 @@ function error(message: string): CallToolResult {
   };
 }
 
+const TIMEZONE = process.env.TEAMSNAP_TIMEZONE || "America/Los_Angeles";
+
+function localizeDate(utcDate: unknown): string | null {
+  if (!utcDate) return null;
+  const d = new Date(String(utcDate));
+  if (isNaN(d.getTime())) return String(utcDate);
+  return d.toLocaleString("en-US", {
+    timeZone: TIMEZONE,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  });
+}
+
 type ToolArgs = Record<string, unknown>;
 
 export async function handleToolCall(name: string, args: ToolArgs): Promise<CallToolResult> {
@@ -258,8 +277,9 @@ async function handleGetEvents(args: ToolArgs): Promise<CallToolResult> {
       id: e.id,
       name: e.name,
       type: e.is_game ? "game" : "practice",
-      startDate: e.start_date,
-      endDate: e.end_date,
+      startDate: localizeDate(e.start_date),
+      startDateUTC: e.start_date,
+      endDate: localizeDate(e.end_date),
       location: e.location_name,
       opponent: e.opponent_name,
       isHome: e.is_home,
@@ -268,6 +288,7 @@ async function handleGetEvents(args: ToolArgs): Promise<CallToolResult> {
 
     return success({
       teamId,
+      timezone: TIMEZONE,
       count: simplified.length,
       events: simplified,
     });
@@ -288,7 +309,13 @@ async function handleGetEvent(args: ToolArgs): Promise<CallToolResult> {
 
   try {
     const event = await teamsnapClient.getEvent(eventId);
-    return success(event);
+    const localized = {
+      ...event,
+      startDateLocal: localizeDate(event.start_date),
+      endDateLocal: localizeDate(event.end_date),
+      timezone: TIMEZONE,
+    };
+    return success(localized);
   } catch (err) {
     return error(`Failed to get event: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
