@@ -1,7 +1,8 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
-import { success, error, requireString, requireExactlyOne, type ToolArgs } from "./common.js";
+import { localizeTime } from "../../utils/time.js";
+import { success, error, requireString, requireExactlyOne, getViewerTZ, type ToolArgs } from "./common.js";
 
 function firstPrimary<T extends Record<string, unknown>>(items: T[], preferKey = "is_primary"): T | undefined {
   return items.find((i) => i[preferKey] === true) ?? items[0];
@@ -123,5 +124,63 @@ export async function handleGetContacts(args: ToolArgs): Promise<CallToolResult>
     });
   } catch (err) {
     return error(`Failed to get contacts: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleGetMemberAvailability(args: ToolArgs): Promise<CallToolResult> {
+  const memberId = requireString(args, "member_id");
+  const startDate = typeof args.start_date === "string" ? args.start_date : null;
+  const endDate = typeof args.end_date === "string" ? args.end_date : null;
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+  try {
+    const core = teamsnapClient.getCore();
+    const avails = await teamsnapClient.getMemberAvailabilities(memberId);
+    const eventIds = Array.from(new Set(avails.map((a) => String(a.event_id)).filter(Boolean)));
+    const events = await Promise.all(
+      eventIds.map((id) => core.searchOne(`${ENDPOINTS.events}?id=${id}`).catch(() => null))
+    );
+    const eventById = new Map<string, Record<string, unknown>>();
+    for (const e of events) if (e) eventById.set(String(e.id), e);
+
+    const statusLabel = (code: unknown): "yes" | "no" | "maybe" | "noResponse" => {
+      const s = String(code ?? "").toLowerCase();
+      if (s === "yes" || s === "1") return "yes";
+      if (s === "no" || s === "0") return "no";
+      if (s === "maybe" || s === "2") return "maybe";
+      return "noResponse";
+    };
+
+    const viewerTZ = getViewerTZ();
+    let responses = avails.map((a) => {
+      const ev = eventById.get(String(a.event_id));
+      const tz = (ev?.time_zone_iana_name as string | null) ?? null;
+      const tzLabel = (ev?.time_zone as string | null) ?? null;
+      return {
+        event_id: a.event_id,
+        event_name: ev?.name ?? null,
+        event_start: localizeTime((ev?.start_date as string | null) ?? null, tz, tzLabel, { viewerTZ }),
+        status: statusLabel(a.status_code),
+        notes: a.notes ?? null,
+      };
+    });
+
+    if (startDate) {
+      const s = new Date(startDate);
+      responses = responses.filter((r) => r.event_start?.utc && new Date(r.event_start.utc) >= s);
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      responses = responses.filter((r) => r.event_start?.utc && new Date(r.event_start.utc) <= e);
+    }
+
+    responses.sort((a, b) => {
+      const aT = a.event_start?.utc ? new Date(a.event_start.utc).getTime() : 0;
+      const bT = b.event_start?.utc ? new Date(b.event_start.utc).getTime() : 0;
+      return aT - bT;
+    });
+
+    return success({ member_id: memberId, count: responses.length, responses });
+  } catch (err) {
+    return error(`Failed to get member availability: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }

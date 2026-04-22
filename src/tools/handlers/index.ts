@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { error, type ToolArgs } from "./common.js";
 import { handleAuth, handleAuthStatus, handleLogout } from "./auth.js";
 import { handleListTeams, handleGetTeam } from "./teams.js";
-import { handleGetRoster, handleGetContacts } from "./roster.js";
+import { handleGetRoster, handleGetContacts, handleGetMemberAvailability } from "./roster.js";
 import { handleGetEvents, handleGetEvent } from "./events.js";
 import { handleGetAvailability } from "./availability.js";
 import { handleGetCalendarUrls, handleGetCustomData } from "./meta.js";
@@ -45,6 +45,8 @@ export async function handleToolCall(name: string, args: ToolArgs): Promise<Call
         return handleGetOpponents(args);
       case "teamsnap_get_results_and_standings":
         return handleGetResultsAndStandings(args);
+      case "teamsnap_get_member_availability":
+        return handleGetMemberAvailability(args);
       default:
         return error(`Unknown tool: ${name}`);
     }
