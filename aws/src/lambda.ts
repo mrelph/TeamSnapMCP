@@ -29,7 +29,7 @@ _setTeamSnapClient(awsClient as unknown as import("../../src/api/client.js").Tea
 
 const TEAMSNAP_AUTH_URL = "https://auth.teamsnap.com/oauth/authorize";
 const TEAMSNAP_TOKEN_URL = "https://auth.teamsnap.com/oauth/token";
-const TEAMSNAP_SCOPES = "read";
+const TEAMSNAP_SCOPES = "read write";
 
 function getBaseUrl(event: APIGatewayProxyEventV2): string {
   if (process.env.BASE_URL) return process.env.BASE_URL;

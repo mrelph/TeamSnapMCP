@@ -53,7 +53,7 @@ export class TeamSnapCore {
       if (refreshed) {
         return this.request<T>(endpointOrUrl, options, true);
       }
-      throw new Error("Session expired. Please re-authenticate with teamsnap_auth.");
+      throw new Error("reauthentication_required: Your TeamSnap session is invalid or lacks the required scope. Please run teamsnap_auth to reconnect.");
     }
 
     if (!response.ok) {
