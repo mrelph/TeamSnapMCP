@@ -172,3 +172,44 @@ export async function handleCreateTrackedItem(args: ToolArgs): Promise<CallToolR
     return error(`Failed to create tracked item: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
+
+export async function handleAssignTrackedItem(args: ToolArgs): Promise<CallToolResult> {
+  const trackedItemId = requireString(args, "tracked_item_id");
+  const memberId = requireString(args, "member_id");
+  const idempotencyKey = typeof args.idempotency_key === "string" ? args.idempotency_key : undefined;
+  const preview = args.preview !== false;
+
+  const fields: Record<string, unknown> = {
+    tracked_item_id: trackedItemId,
+    member_id: memberId,
+  };
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_post: "assignments",
+      template: buildTemplate(fields).template,
+    });
+  }
+
+  const cached = checkIdempotency(idempotencyKey);
+  if (cached) {
+    return success({ idempotent_replay: true, result: cached });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const created = await core.write("POST", ENDPOINTS.assignmentsBase, fields);
+    const result = {
+      id: created.id,
+      tracked_item_id: created.tracked_item_id,
+      member_id: created.member_id,
+    };
+    storeIdempotency(idempotencyKey, result);
+    return success(result);
+  } catch (err) {
+    return error(`Failed to assign tracked item: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
