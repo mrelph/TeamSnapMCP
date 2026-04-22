@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
 import { localizeTime } from "../../utils/time.js";
-import { success, error, requireExactlyOne, getViewerTZ, type ToolArgs } from "./common.js";
+import { success, error, requireString, requireExactlyOne, getViewerTZ, type ToolArgs } from "./common.js";
 
 export async function handleGetAssignments(args: ToolArgs): Promise<CallToolResult> {
   const { key, value } = requireExactlyOne(args, ["team_id", "event_id"]);
@@ -60,5 +60,67 @@ export async function handleGetAssignments(args: ToolArgs): Promise<CallToolResu
     });
   } catch (err) {
     return error(`Failed to get assignments: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+const TRACKED_STATUS_VALID = ["pending", "claimed", "complete"] as const;
+type TrackedStatus = (typeof TRACKED_STATUS_VALID)[number];
+
+function buildStatusFields(status: TrackedStatus, notes?: string): Record<string, unknown> {
+  const now = new Date().toISOString();
+  const fields: Record<string, unknown> = {};
+  if (status === "pending") {
+    fields.claimed_at = null;
+    fields.completed_at = null;
+  } else if (status === "claimed") {
+    fields.claimed_at = now;
+    fields.completed_at = null;
+  } else {
+    fields.completed_at = now;
+  }
+  if (notes !== undefined) fields.notes = notes;
+  return fields;
+}
+
+export async function handleUpdateTrackedItemStatus(args: ToolArgs): Promise<CallToolResult> {
+  const statusId = requireString(args, "tracked_item_status_id");
+  const status = requireString(args, "status").toLowerCase() as TrackedStatus;
+  const notes = typeof args.notes === "string" ? args.notes : undefined;
+  const preview = args.preview !== false;
+
+  if (!TRACKED_STATUS_VALID.includes(status)) {
+    return error(`status must be one of: ${TRACKED_STATUS_VALID.join(", ")} (got "${status}")`);
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const fields = buildStatusFields(status, notes);
+
+    if (preview) {
+      return success({
+        preview: true,
+        would_patch: `tracked_item_status ${statusId}`,
+        with: { status, ...fields },
+      });
+    }
+
+    const updated = await core.write(
+      "PATCH",
+      ENDPOINTS.trackedItemStatusById(statusId),
+      fields
+    );
+    return success({
+      id: updated.id,
+      tracked_item_id: updated.tracked_item_id,
+      member_id: updated.member_id,
+      status,
+      claimed_at: updated.claimed_at ?? null,
+      completed_at: updated.completed_at ?? null,
+      notes: updated.notes ?? null,
+    });
+  } catch (err) {
+    return error(`Failed to update tracked item status: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
