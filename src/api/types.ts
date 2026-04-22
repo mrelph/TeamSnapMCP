@@ -29,3 +29,13 @@ export type ParsedItem = Record<string, unknown> & {
   _href?: string;
   _links?: Link[];
 };
+
+export interface CollectionErrorResponse {
+  collection: {
+    error?: {
+      title?: string;
+      message?: string;
+      code?: string;
+    };
+  };
+}
