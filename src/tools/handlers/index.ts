@@ -3,11 +3,26 @@ import { error, type ToolArgs } from "./common.js";
 import { handleAuth, handleAuthStatus, handleLogout } from "./auth.js";
 import { handleListTeams, handleGetTeam } from "./teams.js";
 import { handleGetRoster, handleGetContacts, handleGetMemberAvailability } from "./roster.js";
-import { handleGetEvents, handleGetEvent, handleGetLocation } from "./events.js";
-import { handleGetAvailability } from "./availability.js";
+import {
+  handleGetEvents,
+  handleGetEvent,
+  handleGetLocation,
+  handleCreateEvent,
+  handleUpdateEvent,
+} from "./events.js";
+import { handleGetAvailability, handleSetAvailability } from "./availability.js";
 import { handleGetCalendarUrls, handleGetCustomData } from "./meta.js";
-import { handleGetAnnouncements } from "./announcements.js";
-import { handleGetAssignments } from "./assignments.js";
+import {
+  handleGetAnnouncements,
+  handleSendTeamMessage,
+  handleSendAnnouncement,
+} from "./announcements.js";
+import {
+  handleGetAssignments,
+  handleCreateTrackedItem,
+  handleAssignTrackedItem,
+  handleUpdateTrackedItemStatus,
+} from "./assignments.js";
 import { handleGetOpponents, handleGetResultsAndStandings } from "./opponents.js";
 import { handleGetStats } from "./stats.js";
 import { handleGetForumTopics, handleGetForumPosts } from "./forum.js";
@@ -57,6 +72,22 @@ export async function handleToolCall(name: string, args: ToolArgs): Promise<Call
         return handleGetForumTopics(args);
       case "teamsnap_get_forum_posts":
         return handleGetForumPosts(args);
+      case "teamsnap_set_availability":
+        return handleSetAvailability(args);
+      case "teamsnap_update_tracked_item_status":
+        return handleUpdateTrackedItemStatus(args);
+      case "teamsnap_create_tracked_item":
+        return handleCreateTrackedItem(args);
+      case "teamsnap_assign_tracked_item":
+        return handleAssignTrackedItem(args);
+      case "teamsnap_create_event":
+        return handleCreateEvent(args);
+      case "teamsnap_update_event":
+        return handleUpdateEvent(args);
+      case "teamsnap_send_team_message":
+        return handleSendTeamMessage(args);
+      case "teamsnap_send_announcement":
+        return handleSendAnnouncement(args);
       default:
         return error(`Unknown tool: ${name}`);
     }
