@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
 import { localizeTime } from "../../utils/time.js";
+import { buildTemplate, checkIdempotency, storeIdempotency } from "../../utils/writeSafety.js";
 import { success, error, requireString, getViewerTZ, type ToolArgs } from "./common.js";
 
 function normalize(
@@ -68,5 +69,48 @@ export async function handleGetAnnouncements(args: ToolArgs): Promise<CallToolRe
     });
   } catch (err) {
     return error(`Failed to get announcements: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleSendTeamMessage(args: ToolArgs): Promise<CallToolResult> {
+  const teamId = requireString(args, "team_id");
+  const body = requireString(args, "body");
+  const idempotencyKey = typeof args.idempotency_key === "string" ? args.idempotency_key : undefined;
+  const preview = args.preview !== false;
+
+  const fields: Record<string, unknown> = {
+    team_id: teamId,
+    message: body,
+  };
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_post: "messages",
+      template: buildTemplate(fields).template,
+    });
+  }
+
+  const cached = checkIdempotency(idempotencyKey);
+  if (cached) {
+    return success({ idempotent_replay: true, result: cached });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const created = await core.write("POST", ENDPOINTS.messagesBase, fields);
+    const result = {
+      id: created.id,
+      team_id: created.team_id,
+      sender_id: created.member_id ?? created.sender_id ?? null,
+      body: created.message ?? created.body ?? body,
+      sent_at: created.created_at ?? null,
+    };
+    storeIdempotency(idempotencyKey, result);
+    return success(result);
+  } catch (err) {
+    return error(`Failed to send team message: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
