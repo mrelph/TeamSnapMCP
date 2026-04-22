@@ -1,13 +1,13 @@
 # TeamSnap MCP Server
 
-A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that connects Claude to your TeamSnap account. Access your teams, rosters, events, and availability data directly from Claude Desktop or CLI.
+A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that connects Claude to your TeamSnap account. Read and manage teams, rosters, events, availability, volunteer sign-ups, and team communications directly from Claude Desktop or CLI.
 
 ## Features
 
-- **Teams** — List and view all your TeamSnap teams
-- **Rosters** — Get player and coach information
-- **Events** — View games, practices, and other events with date filtering
-- **Availability** — Check who's available for events, with correct handling of all RSVP states including numeric status codes
+- **21 read tools** — teams, rosters, events, availability, locations, contacts, announcements, assignments, opponents, standings, stats, forums, calendars, and custom fields
+- **8 write tools** — set RSVPs, create/update/cancel events, create and assign tracked items (snacks, volunteers, carpools), send team messages, and send broadcast email/push announcements
+- **Safety rails on every write** — `preview: true` by default returns the payload without calling TeamSnap; destructive writes additionally require `confirm: true`; POST tools support an optional `idempotency_key`. See [Write Tools & Safety](#write-tools--safety).
+- **Localized event times** — events always returned in their own timezone; optional viewer-timezone field for travel
 - **Secure** — OAuth 2.0 with AES-256-GCM encrypted local storage or DynamoDB
 - **Flexible Deployment** — Run locally, via npx, or on AWS Lambda
 
@@ -198,11 +198,18 @@ Claude (calls teamsnap_set_availability with preview: false):
 
 ## Example Prompts
 
+**Reading:**
 - "What teams do I have in TeamSnap?"
 - "Show me the roster for the Jr Kraken"
 - "What games do we have scheduled this month?"
 - "Who's available for Saturday's game?"
 - "Who has declined Saturday's game?"
+
+**Writing (preview first, commit second):**
+- "Preview setting my RSVP to yes for Saturday's game" → inspect the payload → "Looks right, do it"
+- "Create a snack sign-up called 'Post-game snacks' for next week's event"
+- "Post a team message saying 'Uniforms this Saturday are white'"
+- "Draft an announcement to the team about Sunday's rain-out — don't send it until I confirm"
 
 ## Architecture
 
