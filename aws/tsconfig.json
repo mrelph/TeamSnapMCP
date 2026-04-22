@@ -5,14 +5,13 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "..",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "declaration": false,
-    "sourceMap": false
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
