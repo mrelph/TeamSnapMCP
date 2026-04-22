@@ -116,4 +116,13 @@ export class TeamSnapClient {
   }
 }
 
-export const teamsnapClient = new TeamSnapClient();
+let _client: TeamSnapClient = new TeamSnapClient();
+export const teamsnapClient = new Proxy({} as TeamSnapClient, {
+  get(_target, prop, _receiver) {
+    return Reflect.get(_client, prop, _client);
+  },
+});
+
+export function _setTeamSnapClient(c: TeamSnapClient): void {
+  _client = c;
+}
