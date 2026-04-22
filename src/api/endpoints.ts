@@ -1,0 +1,45 @@
+export const API_BASE = "https://api.teamsnap.com/v3";
+export const TOKEN_URL = "https://auth.teamsnap.com/oauth/token";
+
+export const ENDPOINTS = {
+  me: "/me",
+  teams: "/teams/search",
+  members: "/members/search",
+  events: "/events/search",
+  availabilities: "/availabilities/search",
+  locations: "/locations/search",
+  locationById: (id: string) => `/locations/${id}`,
+  memberEmails: "/member_email_addresses/search",
+  memberPhones: "/member_phone_numbers/search",
+  memberPhotos: "/member_photos/search",
+  contacts: "/contacts/search",
+  contactEmails: "/contact_email_addresses/search",
+  contactPhones: "/contact_phone_numbers/search",
+  broadcastEmails: "/broadcast_emails/search",
+  broadcastAlerts: "/broadcast_alerts/search",
+  messages: "/messages/search",
+  trackedItems: "/tracked_items/search",
+  trackedItemStatuses: "/tracked_item_statuses/search",
+  assignments: "/assignments/search",
+  opponents: "/opponents/search",
+  opponentsResults: "/opponents_results/search",
+  teamResults: "/team_results/search",
+  divisionTeamStandings: "/division_team_standings/search",
+  statistics: "/statistics/search",
+  memberStatistics: "/member_statistics/search",
+  eventStatistics: "/event_statistics/search",
+  teamStatistics: "/team_statistics/search",
+  forumTopics: "/forum_topics/search",
+  forumPosts: "/forum_posts/search",
+  customFields: "/custom_fields/search",
+  customData: "/custom_data/search",
+} as const;
+
+export const REL = {
+  calendar_http: "calendar_http",
+  calendar_http_games_only: "calendar_http_games_only",
+  calendar_webcal: "calendar_webcal",
+  calendar_webcal_games_only: "calendar_webcal_games_only",
+  team_public_site: "team_public_site",
+  location: "location",
+} as const;
