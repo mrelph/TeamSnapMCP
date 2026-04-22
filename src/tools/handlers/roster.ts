@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
-import { success, error, requireString, type ToolArgs } from "./common.js";
+import { success, error, requireString, requireExactlyOne, type ToolArgs } from "./common.js";
 
 function firstPrimary<T extends Record<string, unknown>>(items: T[], preferKey = "is_primary"): T | undefined {
   return items.find((i) => i[preferKey] === true) ?? items[0];
@@ -75,5 +75,53 @@ export async function handleGetRoster(args: ToolArgs): Promise<CallToolResult> {
     });
   } catch (err) {
     return error(`Failed to get roster: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleGetContacts(args: ToolArgs): Promise<CallToolResult> {
+  const { key, value } = requireExactlyOne(args, ["member_id", "team_id"]);
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+  try {
+    const core = teamsnapClient.getCore();
+    const scopeParam = key === "team_id" ? `team_id=${value}` : `member_id=${value}`;
+    const [contacts, emails, phones] = await Promise.all([
+      core.searchMany(`${ENDPOINTS.contacts}?${scopeParam}`).catch(() => []),
+      core.searchMany(`${ENDPOINTS.contactEmails}?${scopeParam}`).catch(() => []),
+      core.searchMany(`${ENDPOINTS.contactPhones}?${scopeParam}`).catch(() => []),
+    ]);
+    const emailsByContact = new Map<string, string[]>();
+    for (const e of emails) {
+      const cid = String(e.contact_id);
+      if (!emailsByContact.has(cid)) emailsByContact.set(cid, []);
+      if (typeof e.email === "string") emailsByContact.get(cid)!.push(e.email);
+    }
+    const phonesByContact = new Map<string, string[]>();
+    for (const p of phones) {
+      const cid = String(p.contact_id);
+      if (!phonesByContact.has(cid)) phonesByContact.set(cid, []);
+      const num = (p.phone_number ?? p.phone_value) as unknown;
+      if (typeof num === "string") phonesByContact.get(cid)!.push(num);
+    }
+    const merged = contacts.map((c) => {
+      const cid = String(c.id);
+      return {
+        id: c.id,
+        member_id: c.member_id,
+        first_name: c.first_name,
+        last_name: c.last_name,
+        label: c.label ?? null,
+        is_emergency: c.is_emergency ?? false,
+        emails: emailsByContact.get(cid) ?? [],
+        phones: phonesByContact.get(cid) ?? [],
+      };
+    });
+    return success({
+      scope: key === "team_id" ? "team" : "member",
+      scope_id: value,
+      count: merged.length,
+      contacts: merged,
+    });
+  } catch (err) {
+    return error(`Failed to get contacts: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
