@@ -10,6 +10,7 @@ import {
   getViewerTZ,
   type ToolArgs,
 } from "./common.js";
+import { buildTemplate, checkIdempotency, storeIdempotency } from "../../utils/writeSafety.js";
 
 const EVENT_ALLOWLIST = [
   "id",
@@ -140,5 +141,60 @@ export async function handleGetLocation(args: ToolArgs): Promise<CallToolResult>
     return success(pickLocationFields(loc));
   } catch (err) {
     return error(`Failed to get location: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleCreateEvent(args: ToolArgs): Promise<CallToolResult> {
+  const teamId = requireString(args, "team_id");
+  const name = requireString(args, "name");
+  const startDate = requireString(args, "start_date");
+  const isGame = typeof args.is_game === "boolean" ? args.is_game : false;
+  const durationMinutes = typeof args.duration_in_minutes === "number" ? args.duration_in_minutes : undefined;
+  const locationId = typeof args.location_id === "string" ? args.location_id : undefined;
+  const opponentId = typeof args.opponent_id === "string" ? args.opponent_id : undefined;
+  const notes = typeof args.notes === "string" ? args.notes : undefined;
+  const uniform = typeof args.uniform === "string" ? args.uniform : undefined;
+  const arrivalMinutesEarly = typeof args.arrival_minutes_early === "number" ? args.arrival_minutes_early : undefined;
+  const idempotencyKey = typeof args.idempotency_key === "string" ? args.idempotency_key : undefined;
+  const preview = args.preview !== false;
+
+  const fields: Record<string, unknown> = {
+    team_id: teamId,
+    name,
+    start_date: startDate,
+    is_game: isGame,
+  };
+  if (durationMinutes !== undefined) fields.duration_in_minutes = durationMinutes;
+  if (locationId !== undefined) fields.location_id = locationId;
+  if (opponentId !== undefined) fields.opponent_id = opponentId;
+  if (notes !== undefined) fields.notes = notes;
+  if (uniform !== undefined) fields.uniform = uniform;
+  if (arrivalMinutesEarly !== undefined) fields.minutes_to_arrive_early = arrivalMinutesEarly;
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_post: "events",
+      template: buildTemplate(fields).template,
+    });
+  }
+
+  const cached = checkIdempotency(idempotencyKey);
+  if (cached) {
+    return success({ idempotent_replay: true, result: cached });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const created = await core.write("POST", ENDPOINTS.eventsBase, fields);
+    const picked = pickEventFields(created);
+    const viewerTZ = getViewerTZ();
+    const localized = localizeEventTimes(picked as EventLike, { viewerTZ });
+    storeIdempotency(idempotencyKey, localized);
+    return success(localized);
+  } catch (err) {
+    return error(`Failed to create event: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
