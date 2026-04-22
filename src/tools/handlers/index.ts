@@ -5,6 +5,7 @@ import { handleListTeams, handleGetTeam } from "./teams.js";
 import { handleGetRoster } from "./roster.js";
 import { handleGetEvents, handleGetEvent } from "./events.js";
 import { handleGetAvailability } from "./availability.js";
+import { handleGetCalendarUrls, handleGetCustomData } from "./meta.js";
 
 export async function handleToolCall(name: string, args: ToolArgs): Promise<CallToolResult> {
   try {
@@ -27,6 +28,10 @@ export async function handleToolCall(name: string, args: ToolArgs): Promise<Call
         return handleGetEvent(args);
       case "teamsnap_get_availability":
         return handleGetAvailability(args);
+      case "teamsnap_get_calendar_urls":
+        return handleGetCalendarUrls(args);
+      case "teamsnap_get_custom_data":
+        return handleGetCustomData(args);
       default:
         return error(`Unknown tool: ${name}`);
     }
