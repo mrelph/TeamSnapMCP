@@ -231,4 +231,147 @@ export const tools: Tool[] = [
       required: [],
     },
   },
+  {
+    name: "teamsnap_set_availability",
+    description:
+      "Set a member's RSVP for an event. Patches the existing availability record. Preview by default; pass preview: false to commit.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        event_id: { type: "string", description: "Event to RSVP to" },
+        member_id: { type: "string", description: "Member whose RSVP is being set" },
+        status: { type: "string", enum: ["yes", "no", "maybe"], description: "RSVP status" },
+        notes: { type: "string", description: "Optional note attached to the RSVP" },
+        preview: { type: "boolean", description: "If true (default), return the payload without patching" },
+      },
+      required: ["event_id", "member_id", "status"],
+    },
+  },
+  {
+    name: "teamsnap_update_tracked_item_status",
+    description:
+      "Update a tracked-item status (snack sign-up, carpool, etc.) to pending, claimed, or complete. Preview by default.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        tracked_item_status_id: { type: "string", description: "Tracked item status record id" },
+        status: { type: "string", enum: ["pending", "claimed", "complete"] },
+        notes: { type: "string", description: "Optional note" },
+        preview: { type: "boolean", description: "If true (default), return the payload without patching" },
+      },
+      required: ["tracked_item_status_id", "status"],
+    },
+  },
+  {
+    name: "teamsnap_create_tracked_item",
+    description:
+      "Create a new tracked item (snack sign-up, carpool, etc.) for a team or event. Preview by default.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        team_id: { type: "string" },
+        name: { type: "string", description: "Short label, e.g. 'Snacks'" },
+        event_id: { type: "string", description: "Optional: attach to a single event" },
+        due_date: { type: "string", description: "Optional ISO 8601" },
+        description: { type: "string" },
+        idempotency_key: { type: "string", description: "Optional 60s dedup key" },
+        preview: { type: "boolean", description: "If true (default), return the payload without posting" },
+      },
+      required: ["team_id", "name"],
+    },
+  },
+  {
+    name: "teamsnap_assign_tracked_item",
+    description: "Assign a tracked item to a team member. Preview by default.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        tracked_item_id: { type: "string" },
+        member_id: { type: "string" },
+        idempotency_key: { type: "string", description: "Optional 60s dedup key" },
+        preview: { type: "boolean", description: "If true (default), return the payload without posting" },
+      },
+      required: ["tracked_item_id", "member_id"],
+    },
+  },
+  {
+    name: "teamsnap_create_event",
+    description:
+      "Create a new event (game, practice, meeting). Returns the created event with localized times. Preview by default.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        team_id: { type: "string" },
+        name: { type: "string" },
+        is_game: { type: "boolean", description: "Game vs practice/other" },
+        start_date: { type: "string", description: "ISO 8601 UTC start time" },
+        duration_in_minutes: { type: "number" },
+        location_id: { type: "string" },
+        opponent_id: { type: "string", description: "For games" },
+        notes: { type: "string" },
+        uniform: { type: "string" },
+        arrival_minutes_early: { type: "number" },
+        idempotency_key: { type: "string", description: "Optional 60s dedup key" },
+        preview: { type: "boolean", description: "If true (default), return the payload without posting" },
+      },
+      required: ["team_id", "name", "start_date"],
+    },
+  },
+  {
+    name: "teamsnap_update_event",
+    description:
+      "Update an existing event via a patch object. Non-destructive fields (name, start_date, location_id, duration_in_minutes, notes, uniform, opponent_id, minutes_to_arrive_early) update freely. Setting is_canceled: true requires confirm: true because it notifies the team.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        event_id: { type: "string" },
+        patch: {
+          type: "object",
+          description:
+            "Object of fields to update. Supported keys: name, start_date, location_id, duration_in_minutes, notes, uniform, opponent_id, minutes_to_arrive_early, is_canceled.",
+        },
+        preview: { type: "boolean", description: "If true (default), return the payload without patching" },
+        confirm: { type: "boolean", description: "Required when patch.is_canceled is true" },
+      },
+      required: ["event_id", "patch"],
+    },
+  },
+  {
+    name: "teamsnap_send_team_message",
+    description:
+      "Post an in-app message to the team's message board. No emails or push notifications are sent. Preview by default.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        team_id: { type: "string" },
+        body: { type: "string", description: "Message body" },
+        idempotency_key: { type: "string", description: "Optional 60s dedup key" },
+        preview: { type: "boolean", description: "If true (default), return the payload without posting" },
+      },
+      required: ["team_id", "body"],
+    },
+  },
+  {
+    name: "teamsnap_send_announcement",
+    description:
+      "Send a broadcast email or push alert to the team (or a subset of members). Real emails/alerts are sent. Preview by default; always requires confirm: true to actually send.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        team_id: { type: "string" },
+        channel: { type: "string", enum: ["email", "alert"], description: "Delivery channel" },
+        subject: { type: "string" },
+        body: { type: "string" },
+        recipient_member_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional: specific members (default: whole team)",
+        },
+        idempotency_key: { type: "string", description: "Optional 60s dedup key" },
+        preview: { type: "boolean", description: "If true (default), return the payload without sending" },
+        confirm: { type: "boolean", description: "Required to actually send" },
+      },
+      required: ["team_id", "channel", "subject", "body"],
+    },
+  },
 ];
