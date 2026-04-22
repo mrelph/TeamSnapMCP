@@ -4,7 +4,7 @@
   "description": "AWS-hosted TeamSnap MCP Server",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/lambda.ts --bundle --platform=node --target=node20 --outfile=dist/lambda.js --format=cjs --external:@aws-sdk/*",
+    "build": "esbuild src/lambda.ts --bundle --platform=node --target=node20 --outfile=dist/lambda.js --format=cjs --external:@aws-sdk/* --external:open",
     "deploy": "node scripts/deploy.js"
   },
   "dependencies": {

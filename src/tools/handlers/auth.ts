@@ -1,4 +1,3 @@
-import open from "open";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { startOAuthFlow } from "../../auth/oauth.js";
@@ -15,6 +14,7 @@ export async function handleAuth(args: ToolArgs): Promise<CallToolResult> {
   }
   try {
     const { authUrl, waitForCallback } = await startOAuthFlow({ clientId, clientSecret });
+    const { default: open } = await import("open");
     await open(authUrl);
     const credentials = await waitForCallback();
     return success({
