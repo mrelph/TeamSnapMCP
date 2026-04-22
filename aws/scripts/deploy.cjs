@@ -2,9 +2,22 @@ const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require("@a
 const { IAMClient, CreateRoleCommand, PutRolePolicyCommand, GetRoleCommand } = require("@aws-sdk/client-iam");
 const { LambdaClient, CreateFunctionCommand, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand, GetFunctionCommand, AddPermissionCommand } = require("@aws-sdk/client-lambda");
 const { ApiGatewayV2Client, CreateApiCommand, CreateStageCommand, CreateIntegrationCommand, CreateRouteCommand, GetApisCommand, GetIntegrationsCommand, GetRoutesCommand } = require("@aws-sdk/client-apigatewayv2");
-const { readFileSync } = require("fs");
+const { readFileSync, createWriteStream } = require("fs");
 const { execSync } = require("child_process");
 const { join } = require("path");
+const archiver = require("archiver");
+
+function zipFile(srcPath, destZipPath) {
+  return new Promise((resolve, reject) => {
+    const output = createWriteStream(destZipPath);
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    output.on("close", () => resolve(archive.pointer()));
+    archive.on("error", reject);
+    archive.pipe(output);
+    archive.file(srcPath, { name: "lambda.js" });
+    archive.finalize();
+  });
+}
 
 const PROJECT_ROOT = join(__dirname, "..");
 const REGION = process.env.AWS_REGION || "us-west-2";
@@ -109,7 +122,7 @@ async function createIAMRole() {
 async function buildLambda() {
   console.log("Building Lambda...");
   execSync("npm run build", { cwd: PROJECT_ROOT, stdio: "inherit" });
-  execSync("cd dist && zip -r ../lambda.zip lambda.js", { cwd: PROJECT_ROOT, stdio: "inherit" });
+  await zipFile(join(PROJECT_ROOT, "dist", "lambda.js"), join(PROJECT_ROOT, "lambda.zip"));
   console.log("  Build complete");
 }
 
