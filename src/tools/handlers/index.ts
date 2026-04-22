@@ -3,7 +3,7 @@ import { error, type ToolArgs } from "./common.js";
 import { handleAuth, handleAuthStatus, handleLogout } from "./auth.js";
 import { handleListTeams, handleGetTeam } from "./teams.js";
 import { handleGetRoster, handleGetContacts, handleGetMemberAvailability } from "./roster.js";
-import { handleGetEvents, handleGetEvent } from "./events.js";
+import { handleGetEvents, handleGetEvent, handleGetLocation } from "./events.js";
 import { handleGetAvailability } from "./availability.js";
 import { handleGetCalendarUrls, handleGetCustomData } from "./meta.js";
 import { handleGetAnnouncements } from "./announcements.js";
@@ -33,6 +33,8 @@ export async function handleToolCall(name: string, args: ToolArgs): Promise<Call
         return handleGetEvent(args);
       case "teamsnap_get_availability":
         return handleGetAvailability(args);
+      case "teamsnap_get_location":
+        return handleGetLocation(args);
       case "teamsnap_get_calendar_urls":
         return handleGetCalendarUrls(args);
       case "teamsnap_get_custom_data":
