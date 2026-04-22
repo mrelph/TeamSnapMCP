@@ -21,7 +21,6 @@ export interface CollectionResponse {
     href: string;
     items?: CollectionItem[];
     links?: Link[];
-    error?: { title: string; message: string };
   };
 }
 
