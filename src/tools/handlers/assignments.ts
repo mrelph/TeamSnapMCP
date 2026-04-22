@@ -3,6 +3,7 @@ import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
 import { localizeTime } from "../../utils/time.js";
 import { success, error, requireString, requireExactlyOne, getViewerTZ, type ToolArgs } from "./common.js";
+import { buildTemplate, checkIdempotency, storeIdempotency } from "../../utils/writeSafety.js";
 
 export async function handleGetAssignments(args: ToolArgs): Promise<CallToolResult> {
   const { key, value } = requireExactlyOne(args, ["team_id", "event_id"]);
@@ -122,5 +123,52 @@ export async function handleUpdateTrackedItemStatus(args: ToolArgs): Promise<Cal
     });
   } catch (err) {
     return error(`Failed to update tracked item status: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleCreateTrackedItem(args: ToolArgs): Promise<CallToolResult> {
+  const teamId = requireString(args, "team_id");
+  const name = requireString(args, "name");
+  const eventId = typeof args.event_id === "string" ? args.event_id : undefined;
+  const dueDate = typeof args.due_date === "string" ? args.due_date : undefined;
+  const description = typeof args.description === "string" ? args.description : undefined;
+  const idempotencyKey = typeof args.idempotency_key === "string" ? args.idempotency_key : undefined;
+  const preview = args.preview !== false;
+
+  const fields: Record<string, unknown> = { team_id: teamId, name };
+  if (eventId !== undefined) fields.event_id = eventId;
+  if (dueDate !== undefined) fields.due_date = dueDate;
+  if (description !== undefined) fields.description = description;
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_post: "tracked_items",
+      template: buildTemplate(fields).template,
+    });
+  }
+
+  const cached = checkIdempotency(idempotencyKey);
+  if (cached) {
+    return success({ idempotent_replay: true, result: cached });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const created = await core.write("POST", ENDPOINTS.trackedItemsBase, fields);
+    const result = {
+      id: created.id,
+      team_id: created.team_id,
+      event_id: created.event_id ?? null,
+      name: created.name,
+      due_date: created.due_date ?? null,
+      description: created.description ?? null,
+    };
+    storeIdempotency(idempotencyKey, result);
+    return success(result);
+  } catch (err) {
+    return error(`Failed to create tracked item: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
