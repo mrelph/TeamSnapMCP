@@ -44,8 +44,8 @@ async function createDynamoDBTable() {
 
   await dynamodb.send(new CreateTableCommand({
     TableName: TABLE_NAME,
-    KeySchema: [{ AttributeName: "pk", KeyType: "HASH" }],
-    AttributeDefinitions: [{ AttributeName: "pk", AttributeType: "S" }],
+    KeySchema: [{ AttributeName: "userId", KeyType: "HASH" }],
+    AttributeDefinitions: [{ AttributeName: "userId", AttributeType: "S" }],
     BillingMode: "PAY_PER_REQUEST",
   }));
 
