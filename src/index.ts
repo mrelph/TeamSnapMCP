@@ -8,7 +8,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { tools } from "./tools/index.js";
-import { handleToolCall } from "./tools/handlers.js";
+import { handleToolCall } from "./tools/handlers/index.js";
 
 const server = new Server(
   {

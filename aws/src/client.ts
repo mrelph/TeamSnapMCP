@@ -1,19 +1,21 @@
-import { OAUTH_REDIRECT_URI } from "../utils/config.js";
-import { loadCredentials, saveCredentials, type StoredCredentials } from "../utils/storage.js";
-import { TeamSnapCore, type CoreCredentials } from "./core.js";
-import { ENDPOINTS, TOKEN_URL } from "./endpoints.js";
-import type { ParsedItem } from "./types.js";
+import { TeamSnapCore, type CoreCredentials } from "../../src/api/core.js";
+import { ENDPOINTS, TOKEN_URL } from "../../src/api/endpoints.js";
+import type { ParsedItem } from "../../src/api/types.js";
+import { loadCredentials, saveCredentials, type StoredCredentials } from "./dynamodb.js";
 
 export class TeamSnapClient {
   private credentials: StoredCredentials | null = null;
   private readonly core: TeamSnapCore;
 
   constructor() {
-    this.credentials = loadCredentials();
     this.core = new TeamSnapCore({
       getCredentials: () => this.toCoreCredentials(),
       onRefresh: () => this.refreshToken(),
     });
+  }
+
+  async loadCredentials(): Promise<void> {
+    this.credentials = await loadCredentials();
   }
 
   private toCoreCredentials(): CoreCredentials | null {
@@ -31,10 +33,6 @@ export class TeamSnapClient {
     return this.credentials !== null && !!this.credentials.accessToken;
   }
 
-  reloadCredentials(): void {
-    this.credentials = loadCredentials();
-  }
-
   private async refreshToken(): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: number } | null> {
     if (!this.credentials?.refreshToken) return null;
     try {
@@ -46,22 +44,22 @@ export class TeamSnapClient {
           refresh_token: this.credentials.refreshToken,
           client_id: this.credentials.clientId,
           client_secret: this.credentials.clientSecret,
-          redirect_uri: OAUTH_REDIRECT_URI,
         }),
       });
       if (!response.ok) return null;
       const data = (await response.json()) as { access_token: string; refresh_token?: string; expires_in?: number };
-      this.credentials = {
+      const updated: StoredCredentials = {
         ...this.credentials,
         accessToken: data.access_token,
         refreshToken: data.refresh_token ?? this.credentials.refreshToken,
         expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
       };
-      saveCredentials(this.credentials);
+      await saveCredentials(updated);
+      this.credentials = updated;
       return {
         accessToken: data.access_token,
         refreshToken: data.refresh_token,
-        expiresAt: this.credentials.expiresAt,
+        expiresAt: updated.expiresAt,
       };
     } catch {
       return null;
@@ -79,12 +77,8 @@ export class TeamSnapClient {
   }
 
   async getTeams(): Promise<ParsedItem[]> {
-    let userId = this.credentials?.teamsnapUserId;
-    if (!userId) {
-      const me = await this.getMe();
-      userId = String(me.id);
-    }
-    return this.core.searchMany(`${ENDPOINTS.teams}?user_id=${userId}`);
+    const me = await this.getMe();
+    return this.core.searchMany(`${ENDPOINTS.teams}?user_id=${me.id}`);
   }
 
   async getTeam(teamId: string): Promise<ParsedItem> {
@@ -114,15 +108,4 @@ export class TeamSnapClient {
   async getMemberAvailabilities(memberId: string): Promise<ParsedItem[]> {
     return this.core.searchMany(`${ENDPOINTS.availabilities}?member_id=${memberId}`);
   }
-}
-
-let _client: TeamSnapClient = new TeamSnapClient();
-export const teamsnapClient = new Proxy({} as TeamSnapClient, {
-  get(_target, prop, _receiver) {
-    return Reflect.get(_client, prop, _client);
-  },
-});
-
-export function _setTeamSnapClient(c: TeamSnapClient): void {
-  _client = c;
 }

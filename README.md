@@ -131,17 +131,29 @@ A browser window will open for OAuth login. Once you authorize, you're connected
 
 ## Available Tools
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `teamsnap_auth` | Connect to TeamSnap via OAuth | `client_id?`, `client_secret?` |
+| Tool | Description | Required args |
+|------|-------------|---------------|
+| `teamsnap_auth` | Connect to TeamSnap via OAuth | — |
 | `teamsnap_auth_status` | Check connection status | — |
-| `teamsnap_logout` | Disconnect and clear credentials | — |
+| `teamsnap_logout` | Disconnect | — |
 | `teamsnap_list_teams` | List all your teams | — |
-| `teamsnap_get_team` | Get team details | `team_id` |
-| `teamsnap_get_roster` | Get players and coaches | `team_id` |
-| `teamsnap_get_events` | Get team events | `team_id`, `start_date?`, `end_date?` |
-| `teamsnap_get_event` | Get event details | `event_id` |
-| `teamsnap_get_availability` | Get event RSVP status for all members | `event_id` |
+| `teamsnap_get_team` | Team details (sport, timezone, public site) | `team_id` |
+| `teamsnap_get_roster` | Players + coaches with contact info, photos | `team_id` |
+| `teamsnap_get_events` | Events with arrival/duration/uniform/localized times | `team_id` |
+| `teamsnap_get_event` | One event, with inlined location | `event_id` |
+| `teamsnap_get_location` | Field address, map link, parking notes | `location_id` or `event_id` |
+| `teamsnap_get_availability` | Event RSVP status grouped | `event_id` |
+| `teamsnap_get_member_availability` | One member's RSVPs across events | `member_id` |
+| `teamsnap_get_contacts` | Parent/guardian contacts (email + phone) | `member_id` or `team_id` |
+| `teamsnap_get_announcements` | Recent broadcast emails + alerts + messages | `team_id` |
+| `teamsnap_get_assignments` | Snacks/volunteer/carpool sign-ups | `team_id` or `event_id` |
+| `teamsnap_get_opponents` | Opponent catalog with head-to-head record | `team_id` |
+| `teamsnap_get_results_and_standings` | Team record + division standings | `team_id` |
+| `teamsnap_get_stats` | Team/member/event statistics | `team_id` |
+| `teamsnap_get_forum_topics` | Team forum discussion topics | `team_id` |
+| `teamsnap_get_forum_posts` | Posts in a forum topic | `topic_id` |
+| `teamsnap_get_calendar_urls` | iCal/webcal feeds (all or games-only) | `team_id` |
+| `teamsnap_get_custom_data` | League/team custom field values | `team_id` or `member_id` |
 
 ### Availability Status Codes
 
@@ -194,6 +206,7 @@ AWS Deployment:
 | `TEAMSNAP_CALLBACK_PORT` | No | `8374` | Local OAuth callback port |
 | `TEAMSNAP_REDIRECT_URI` | No | — | Override redirect URI (for tunnels) |
 | `TEAMSNAP_MCP_ENDPOINT` | AWS wrapper only | — | API Gateway endpoint URL |
+| `TEAMSNAP_TIMEZONE` | No | — | Your personal ("viewer") timezone. Events are always localized to their own timezone first (from the API); if this variable is set to a different IANA zone, tools add a second `viewer` field so you can see both. Useful when traveling. |
 
 ## Security
 
