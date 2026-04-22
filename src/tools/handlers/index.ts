@@ -8,6 +8,7 @@ import { handleGetAvailability } from "./availability.js";
 import { handleGetCalendarUrls, handleGetCustomData } from "./meta.js";
 import { handleGetAnnouncements } from "./announcements.js";
 import { handleGetAssignments } from "./assignments.js";
+import { handleGetOpponents, handleGetResultsAndStandings } from "./opponents.js";
 
 export async function handleToolCall(name: string, args: ToolArgs): Promise<CallToolResult> {
   try {
@@ -40,6 +41,10 @@ export async function handleToolCall(name: string, args: ToolArgs): Promise<Call
         return handleGetAnnouncements(args);
       case "teamsnap_get_assignments":
         return handleGetAssignments(args);
+      case "teamsnap_get_opponents":
+        return handleGetOpponents(args);
+      case "teamsnap_get_results_and_standings":
+        return handleGetResultsAndStandings(args);
       default:
         return error(`Unknown tool: ${name}`);
     }
