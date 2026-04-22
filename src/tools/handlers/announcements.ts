@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
 import { localizeTime } from "../../utils/time.js";
-import { buildTemplate, checkIdempotency, storeIdempotency } from "../../utils/writeSafety.js";
+import { buildTemplate, checkIdempotency, storeIdempotency, requireConfirm } from "../../utils/writeSafety.js";
 import { success, error, requireString, getViewerTZ, type ToolArgs } from "./common.js";
 
 function normalize(
@@ -112,5 +112,77 @@ export async function handleSendTeamMessage(args: ToolArgs): Promise<CallToolRes
     return success(result);
   } catch (err) {
     return error(`Failed to send team message: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleSendAnnouncement(args: ToolArgs): Promise<CallToolResult> {
+  const teamId = requireString(args, "team_id");
+  const channel = requireString(args, "channel").toLowerCase();
+  const subject = requireString(args, "subject");
+  const body = requireString(args, "body");
+  const recipientIds = Array.isArray(args.recipient_member_ids)
+    ? (args.recipient_member_ids as unknown[]).filter((x): x is string => typeof x === "string")
+    : undefined;
+  const idempotencyKey = typeof args.idempotency_key === "string" ? args.idempotency_key : undefined;
+  const preview = args.preview !== false;
+
+  if (channel !== "email" && channel !== "alert") {
+    return error(`channel must be "email" or "alert" (got "${channel}")`);
+  }
+
+  const endpoint = channel === "email" ? ENDPOINTS.broadcastEmailsBase : ENDPOINTS.broadcastAlertsBase;
+  const fields: Record<string, unknown> = {
+    team_id: teamId,
+    subject,
+    body,
+  };
+  if (recipientIds && recipientIds.length > 0) {
+    fields.recipient_ids = recipientIds;
+  }
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_post: endpoint.replace(/^\//, ""),
+      recipients: recipientIds ? `${recipientIds.length} specific members` : "entire team",
+      template: buildTemplate(fields).template,
+      warning: "This will send a real email/alert to recipients. Pass confirm: true to send.",
+    });
+  }
+
+  const check = requireConfirm(args);
+  if (!check.ok) {
+    return success({
+      preview: true,
+      would_post: endpoint.replace(/^\//, ""),
+      recipients: recipientIds ? `${recipientIds.length} specific members` : "entire team",
+      template: buildTemplate(fields).template,
+      blocked: check.reason,
+    });
+  }
+
+  const cached = checkIdempotency(idempotencyKey);
+  if (cached) {
+    return success({ idempotent_replay: true, result: cached });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const created = await core.write("POST", endpoint, fields);
+    const result = {
+      id: created.id,
+      type: channel,
+      team_id: created.team_id,
+      subject: created.subject ?? subject,
+      body: created.body ?? body,
+      sent_at: created.created_at ?? null,
+      recipient_count: recipientIds?.length ?? null,
+    };
+    storeIdempotency(idempotencyKey, result);
+    return success(result);
+  } catch (err) {
+    return error(`Failed to send announcement: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
