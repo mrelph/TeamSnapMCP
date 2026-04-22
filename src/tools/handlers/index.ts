@@ -10,6 +10,7 @@ import { handleGetAnnouncements } from "./announcements.js";
 import { handleGetAssignments } from "./assignments.js";
 import { handleGetOpponents, handleGetResultsAndStandings } from "./opponents.js";
 import { handleGetStats } from "./stats.js";
+import { handleGetForumTopics, handleGetForumPosts } from "./forum.js";
 
 export async function handleToolCall(name: string, args: ToolArgs): Promise<CallToolResult> {
   try {
@@ -50,6 +51,10 @@ export async function handleToolCall(name: string, args: ToolArgs): Promise<Call
         return handleGetMemberAvailability(args);
       case "teamsnap_get_stats":
         return handleGetStats(args);
+      case "teamsnap_get_forum_topics":
+        return handleGetForumTopics(args);
+      case "teamsnap_get_forum_posts":
+        return handleGetForumPosts(args);
       default:
         return error(`Unknown tool: ${name}`);
     }
