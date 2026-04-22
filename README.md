@@ -154,6 +154,14 @@ A browser window will open for OAuth login. Once you authorize, you're connected
 | `teamsnap_get_forum_posts` | Posts in a forum topic | `topic_id` |
 | `teamsnap_get_calendar_urls` | iCal/webcal feeds (all or games-only) | `team_id` |
 | `teamsnap_get_custom_data` | League/team custom field values | `team_id` or `member_id` |
+| `teamsnap_set_availability` | Set a member's RSVP for an event (preview by default) | `event_id`, `member_id`, `status` |
+| `teamsnap_update_tracked_item_status` | Update a tracked-item status (preview by default) | `tracked_item_status_id`, `status` |
+| `teamsnap_create_tracked_item` | Create a snack/volunteer/carpool tracked item (preview by default) | `team_id`, `name` |
+| `teamsnap_assign_tracked_item` | Assign a tracked item to a member (preview by default) | `tracked_item_id`, `member_id` |
+| `teamsnap_create_event` | Create a new event (preview by default) | `team_id`, `name`, `start_date` |
+| `teamsnap_update_event` | Update or cancel an event; confirm required for cancel | `event_id`, `patch` |
+| `teamsnap_send_team_message` | Post an in-app team message (preview by default) | `team_id`, `body` |
+| `teamsnap_send_announcement` | Send an email/alert broadcast; confirm required to send | `team_id`, `channel`, `subject`, `body` |
 
 ### Availability Status Codes
 
@@ -167,6 +175,26 @@ The `teamsnap_get_availability` tool groups members into four categories based o
 | `noResponse` | null/absent | — | Member has not responded |
 
 > **Note:** The numeric code `0` for "declined" is a falsy value in JavaScript. The server uses nullish coalescing (`??`) rather than the logical OR (`||`) operator when reading `status_code` to ensure that a numeric `0` is correctly categorized as "no" rather than silently falling through to "no response".
+
+## Write Tools & Safety
+
+Phase 2 added 8 write tools that can modify TeamSnap data. They follow consistent safety rails:
+
+- **`preview: true` by default.** Every write tool returns the payload it *would* send without actually calling TeamSnap, so you can inspect first. Pass `preview: false` to commit.
+- **`confirm: true` for destructive actions.** `teamsnap_send_announcement` always requires it; `teamsnap_update_event` requires it only when the patch sets `is_canceled: true`.
+- **`idempotency_key` for POST tools.** Optional 60-second in-memory dedup cache keyed on the value you supply. Best-effort on Lambda (short function lifetime).
+- **Re-authentication.** If you authenticated before Phase 2, your existing token has `read` scope only. Your first write will return `reauthentication_required` — just run `teamsnap_auth` again to get a `read write` token. Reads continue to work throughout.
+
+### Example: preview → commit flow
+
+```
+You: "RSVP Mark as 'yes' for event 12345"
+Claude (calls teamsnap_set_availability with defaults):
+  { preview: true, would_patch: "availability 987", with: { status: "yes", status_code: 1, notes: null } }
+You: "Looks right, do it"
+Claude (calls teamsnap_set_availability with preview: false):
+  { status: "yes", event_id: 12345, member_id: 67890, notes: null }
+```
 
 ## Example Prompts
 
@@ -211,7 +239,7 @@ AWS Deployment:
 ## Security
 
 - **Encryption** — Local tokens encrypted with AES-256-GCM (scrypt key derivation)
-- **Read-only** — Only `read` scope requested from TeamSnap
+- **OAuth scope** — `read write` scope requested from TeamSnap; writes are gated behind `preview`/`confirm` (see [Write Tools & Safety](#write-tools--safety))
 - **No hardcoded credentials** — All secrets loaded from environment variables
 - **CSRF protection** — OAuth state parameter validation
 - **Auto-cleanup** — DynamoDB TTL removes stale pending auth after 10 minutes

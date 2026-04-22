@@ -2,7 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
 import { localizeTime } from "../../utils/time.js";
-import { success, error, requireExactlyOne, getViewerTZ, type ToolArgs } from "./common.js";
+import { success, error, requireString, requireExactlyOne, getViewerTZ, type ToolArgs } from "./common.js";
+import { buildTemplate, checkIdempotency, storeIdempotency } from "../../utils/writeSafety.js";
 
 export async function handleGetAssignments(args: ToolArgs): Promise<CallToolResult> {
   const { key, value } = requireExactlyOne(args, ["team_id", "event_id"]);
@@ -60,5 +61,155 @@ export async function handleGetAssignments(args: ToolArgs): Promise<CallToolResu
     });
   } catch (err) {
     return error(`Failed to get assignments: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+const TRACKED_STATUS_VALID = ["pending", "claimed", "complete"] as const;
+type TrackedStatus = (typeof TRACKED_STATUS_VALID)[number];
+
+function buildStatusFields(status: TrackedStatus, notes?: string): Record<string, unknown> {
+  const now = new Date().toISOString();
+  const fields: Record<string, unknown> = {};
+  if (status === "pending") {
+    fields.claimed_at = null;
+    fields.completed_at = null;
+  } else if (status === "claimed") {
+    fields.claimed_at = now;
+    fields.completed_at = null;
+  } else {
+    fields.completed_at = now;
+  }
+  if (notes !== undefined) fields.notes = notes;
+  return fields;
+}
+
+export async function handleUpdateTrackedItemStatus(args: ToolArgs): Promise<CallToolResult> {
+  const statusId = requireString(args, "tracked_item_status_id");
+  const status = requireString(args, "status").toLowerCase() as TrackedStatus;
+  const notes = typeof args.notes === "string" ? args.notes : undefined;
+  const preview = args.preview !== false;
+
+  if (!TRACKED_STATUS_VALID.includes(status)) {
+    return error(`status must be one of: ${TRACKED_STATUS_VALID.join(", ")} (got "${status}")`);
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const fields = buildStatusFields(status, notes);
+
+    if (preview) {
+      return success({
+        preview: true,
+        would_patch: `tracked_item_status ${statusId}`,
+        with: { status, ...fields },
+      });
+    }
+
+    const updated = await core.write(
+      "PATCH",
+      ENDPOINTS.trackedItemStatusById(statusId),
+      fields
+    );
+    return success({
+      id: updated.id,
+      tracked_item_id: updated.tracked_item_id,
+      member_id: updated.member_id,
+      status,
+      claimed_at: updated.claimed_at ?? null,
+      completed_at: updated.completed_at ?? null,
+      notes: updated.notes ?? null,
+    });
+  } catch (err) {
+    return error(`Failed to update tracked item status: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleCreateTrackedItem(args: ToolArgs): Promise<CallToolResult> {
+  const teamId = requireString(args, "team_id");
+  const name = requireString(args, "name");
+  const eventId = typeof args.event_id === "string" ? args.event_id : undefined;
+  const dueDate = typeof args.due_date === "string" ? args.due_date : undefined;
+  const description = typeof args.description === "string" ? args.description : undefined;
+  const idempotencyKey = typeof args.idempotency_key === "string" ? args.idempotency_key : undefined;
+  const preview = args.preview !== false;
+
+  const fields: Record<string, unknown> = { team_id: teamId, name };
+  if (eventId !== undefined) fields.event_id = eventId;
+  if (dueDate !== undefined) fields.due_date = dueDate;
+  if (description !== undefined) fields.description = description;
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_post: "tracked_items",
+      template: buildTemplate(fields).template,
+    });
+  }
+
+  const cached = checkIdempotency(idempotencyKey);
+  if (cached) {
+    return success({ idempotent_replay: true, result: cached });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const created = await core.write("POST", ENDPOINTS.trackedItemsBase, fields);
+    const result = {
+      id: created.id,
+      team_id: created.team_id,
+      event_id: created.event_id ?? null,
+      name: created.name,
+      due_date: created.due_date ?? null,
+      description: created.description ?? null,
+    };
+    storeIdempotency(idempotencyKey, result);
+    return success(result);
+  } catch (err) {
+    return error(`Failed to create tracked item: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+export async function handleAssignTrackedItem(args: ToolArgs): Promise<CallToolResult> {
+  const trackedItemId = requireString(args, "tracked_item_id");
+  const memberId = requireString(args, "member_id");
+  const idempotencyKey = typeof args.idempotency_key === "string" ? args.idempotency_key : undefined;
+  const preview = args.preview !== false;
+
+  const fields: Record<string, unknown> = {
+    tracked_item_id: trackedItemId,
+    member_id: memberId,
+  };
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_post: "assignments",
+      template: buildTemplate(fields).template,
+    });
+  }
+
+  const cached = checkIdempotency(idempotencyKey);
+  if (cached) {
+    return success({ idempotent_replay: true, result: cached });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const created = await core.write("POST", ENDPOINTS.assignmentsBase, fields);
+    const result = {
+      id: created.id,
+      tracked_item_id: created.tracked_item_id,
+      member_id: created.member_id,
+    };
+    storeIdempotency(idempotencyKey, result);
+    return success(result);
+  } catch (err) {
+    return error(`Failed to assign tracked item: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }

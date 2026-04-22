@@ -16,4 +16,4 @@ export const OAUTH_CALLBACK_PORT = parseInt(process.env.TEAMSNAP_CALLBACK_PORT |
 export const OAUTH_REDIRECT_URI = process.env.TEAMSNAP_REDIRECT_URI || `http://localhost:${OAUTH_CALLBACK_PORT}/callback`;
 
 // Scopes we request from TeamSnap
-export const TEAMSNAP_SCOPES = "read";
+export const TEAMSNAP_SCOPES = "read write";
