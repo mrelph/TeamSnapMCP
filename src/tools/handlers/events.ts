@@ -10,7 +10,7 @@ import {
   getViewerTZ,
   type ToolArgs,
 } from "./common.js";
-import { buildTemplate, checkIdempotency, storeIdempotency } from "../../utils/writeSafety.js";
+import { buildTemplate, checkIdempotency, storeIdempotency, requireConfirm } from "../../utils/writeSafety.js";
 
 const EVENT_ALLOWLIST = [
   "id",
@@ -196,5 +196,72 @@ export async function handleCreateEvent(args: ToolArgs): Promise<CallToolResult>
     return success(localized);
   } catch (err) {
     return error(`Failed to create event: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+const EVENT_PATCH_ALLOWED = [
+  "name",
+  "start_date",
+  "location_id",
+  "duration_in_minutes",
+  "notes",
+  "uniform",
+  "is_canceled",
+  "opponent_id",
+  "minutes_to_arrive_early",
+] as const;
+
+export async function handleUpdateEvent(args: ToolArgs): Promise<CallToolResult> {
+  const eventId = requireString(args, "event_id");
+  const patchArg = args.patch;
+  const preview = args.preview !== false;
+
+  if (!patchArg || typeof patchArg !== "object") {
+    return error("patch (object) is required — e.g. { name: 'New name', start_date: '2026-06-14T19:00:00Z' }");
+  }
+  const patch = patchArg as Record<string, unknown>;
+  const keys = Object.keys(patch);
+  if (keys.length === 0) {
+    return error("patch must contain at least one field");
+  }
+  const unknown = keys.filter((k) => !(EVENT_PATCH_ALLOWED as readonly string[]).includes(k));
+  if (unknown.length > 0) {
+    return error(`patch contains unsupported fields: ${unknown.join(", ")}. Allowed: ${EVENT_PATCH_ALLOWED.join(", ")}`);
+  }
+
+  const cancelling = patch.is_canceled === true;
+  if (!preview && cancelling) {
+    const check = requireConfirm(args);
+    if (!check.ok) {
+      return success({
+        preview: true,
+        would_patch: `events/${eventId}`,
+        with: patch,
+        warning: "Cancelling this event notifies the team.",
+        blocked: check.reason,
+      });
+    }
+  }
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_patch: `events/${eventId}`,
+      with: patch,
+      warning: cancelling ? "Cancelling this event notifies the team. Pass confirm: true to send." : undefined,
+    });
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  try {
+    const core = teamsnapClient.getCore();
+    const updated = await core.write("PATCH", ENDPOINTS.eventById(eventId), patch);
+    const picked = pickEventFields(updated);
+    const viewerTZ = getViewerTZ();
+    const localized = localizeEventTimes(picked as EventLike, { viewerTZ });
+    return success(localized);
+  } catch (err) {
+    return error(`Failed to update event: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
