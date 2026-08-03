@@ -232,6 +232,16 @@ export const tools: Tool[] = [
     },
   },
   {
+    name: "teamsnap_whoami_members",
+    description:
+      "Resolve the authenticated TeamSnap user to their member record on each of their teams, reporting permission flags (is_manager, is_owner, is_commissioner) per team. Answers \"which teams am I actually a manager on?\" without opening the app. Read-only.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
     name: "teamsnap_set_availability",
     description:
       "Set a member's RSVP for an event. Patches the existing availability record. Preview by default; pass preview: false to commit.",
@@ -334,6 +344,20 @@ export const tools: Tool[] = [
         confirm: { type: "boolean", description: "Required when patch.is_canceled is true" },
       },
       required: ["event_id", "patch"],
+    },
+  },
+  {
+    name: "teamsnap_delete_event",
+    description:
+      "Permanently delete an event. Preview by default; requires confirm: true to execute. This cannot be undone through this server — prefer teamsnap_update_event with is_canceled: true if you only want to call the event off.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        event_id: { type: "string", description: "The TeamSnap event ID" },
+        preview: { type: "boolean", description: "If true (default), report what would be deleted without deleting" },
+        confirm: { type: "boolean", description: "Required to actually delete" },
+      },
+      required: ["event_id"],
     },
   },
   {

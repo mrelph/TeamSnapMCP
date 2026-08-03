@@ -3,7 +3,7 @@ import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
 import { localizeTime } from "../../utils/time.js";
 import { success, error, requireString, requireExactlyOne, getViewerTZ, type ToolArgs } from "./common.js";
-import { buildTemplate, checkIdempotency, storeIdempotency } from "../../utils/writeSafety.js";
+import { buildTemplate, checkIdempotency, storeIdempotency, idempotencyScope } from "../../utils/writeSafety.js";
 
 export async function handleGetAssignments(args: ToolArgs): Promise<CallToolResult> {
   const { key, value } = requireExactlyOne(args, ["team_id", "event_id"]);
@@ -148,7 +148,8 @@ export async function handleCreateTrackedItem(args: ToolArgs): Promise<CallToolR
     });
   }
 
-  const cached = checkIdempotency(idempotencyKey);
+  const scope = idempotencyScope("teamsnap_create_tracked_item", teamId, fields);
+  const cached = checkIdempotency(scope, idempotencyKey);
   if (cached) {
     return success({ idempotent_replay: true, result: cached });
   }
@@ -166,7 +167,7 @@ export async function handleCreateTrackedItem(args: ToolArgs): Promise<CallToolR
       due_date: created.due_date ?? null,
       description: created.description ?? null,
     };
-    storeIdempotency(idempotencyKey, result);
+    storeIdempotency(scope, idempotencyKey, result);
     return success(result);
   } catch (err) {
     return error(`Failed to create tracked item: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -192,7 +193,8 @@ export async function handleAssignTrackedItem(args: ToolArgs): Promise<CallToolR
     });
   }
 
-  const cached = checkIdempotency(idempotencyKey);
+  const scope = idempotencyScope("teamsnap_assign_tracked_item", `${trackedItemId}/${memberId}`, fields);
+  const cached = checkIdempotency(scope, idempotencyKey);
   if (cached) {
     return success({ idempotent_replay: true, result: cached });
   }
@@ -207,7 +209,7 @@ export async function handleAssignTrackedItem(args: ToolArgs): Promise<CallToolR
       tracked_item_id: created.tracked_item_id,
       member_id: created.member_id,
     };
-    storeIdempotency(idempotencyKey, result);
+    storeIdempotency(scope, idempotencyKey, result);
     return success(result);
   } catch (err) {
     return error(`Failed to assign tracked item: ${err instanceof Error ? err.message : "Unknown error"}`);

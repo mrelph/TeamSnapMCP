@@ -5,6 +5,7 @@ export const ENDPOINTS = {
   me: "/me",
   teams: "/teams/search",
   members: "/members/search",
+  memberById: (id: string) => `/members/${id}`,
   events: "/events/search",
   eventsBase: "/events",
   eventById: (id: string) => `/events/${id}`,
