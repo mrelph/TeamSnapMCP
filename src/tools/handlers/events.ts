@@ -10,7 +10,7 @@ import {
   getViewerTZ,
   type ToolArgs,
 } from "./common.js";
-import { buildTemplate, checkIdempotency, storeIdempotency, requireConfirm } from "../../utils/writeSafety.js";
+import { buildTemplate, checkIdempotency, storeIdempotency, requireConfirm, idempotencyScope } from "../../utils/writeSafety.js";
 
 const EVENT_ALLOWLIST = [
   "id",
@@ -179,7 +179,8 @@ export async function handleCreateEvent(args: ToolArgs): Promise<CallToolResult>
     });
   }
 
-  const cached = checkIdempotency(idempotencyKey);
+  const scope = idempotencyScope("teamsnap_create_event", teamId, fields);
+  const cached = checkIdempotency(scope, idempotencyKey);
   if (cached) {
     return success({ idempotent_replay: true, result: cached });
   }
@@ -192,7 +193,7 @@ export async function handleCreateEvent(args: ToolArgs): Promise<CallToolResult>
     const picked = pickEventFields(created);
     const viewerTZ = getViewerTZ();
     const localized = localizeEventTimes(picked as EventLike, { viewerTZ });
-    storeIdempotency(idempotencyKey, localized);
+    storeIdempotency(scope, idempotencyKey, localized);
     return success(localized);
   } catch (err) {
     return error(`Failed to create event: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -263,5 +264,80 @@ export async function handleUpdateEvent(args: ToolArgs): Promise<CallToolResult>
     return success(localized);
   } catch (err) {
     return error(`Failed to update event: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
+/**
+ * Deletes an event outright. Destructive and not undoable through this server, so it
+ * previews by default and requires confirm: true to execute — the same shape as
+ * cancelling an event, one step further along.
+ */
+export async function handleDeleteEvent(args: ToolArgs): Promise<CallToolResult> {
+  const eventId = requireString(args, "event_id");
+  const preview = args.preview !== false;
+
+  // eventId is interpolated into the request path and URL normalisation resolves
+  // "..", so an unvalidated id could target another endpoint.
+  if (!/^\d+$/.test(eventId)) {
+    return error(`event_id must be a numeric TeamSnap event ID; got "${eventId}"`);
+  }
+
+  if (!teamsnapClient.isAuthenticated()) teamsnapClient.reloadCredentials();
+
+  // Identify the event in the preview. "events/12345" is not something a human can
+  // meaningfully confirm the permanent deletion of — they need the name and date.
+  // repeating_type matters most: if this event belongs to a series, the blast radius
+  // may be larger than the single event named here.
+  let identity: Record<string, unknown> | null = null;
+  try {
+    const e = await teamsnapClient.getEvent(eventId);
+    identity = {
+      name: e.name ?? null,
+      start_date: e.start_date ?? null,
+      team_id: e.team_id ?? null,
+      is_game: e.is_game ?? null,
+      repeating_type: e.repeating_type ?? null,
+    };
+  } catch {
+    // Identification is best-effort; never let it block reporting what would happen.
+  }
+
+  const repeating =
+    identity?.repeating_type !== null && identity?.repeating_type !== undefined && identity?.repeating_type !== "none";
+  const warning =
+    "Deleting an event is permanent and cannot be undone through this server." +
+    (repeating
+      ? ` This event has repeating_type "${String(identity?.repeating_type)}" — deleting it may affect the whole series.`
+      : "");
+
+  if (preview) {
+    return success({
+      preview: true,
+      would_delete: `events/${eventId}`,
+      event: identity,
+      unidentified: identity === null ? "Could not load this event; it may not exist or you may lack access." : undefined,
+      warning,
+      requires_confirm: true,
+    });
+  }
+
+  const check = requireConfirm(args);
+  if (!check.ok) {
+    return success({
+      preview: true,
+      would_delete: `events/${eventId}`,
+      event: identity,
+      warning,
+      requires_confirm: true,
+      blocked: check.reason,
+    });
+  }
+
+  try {
+    const core = teamsnapClient.getCore();
+    const status = await core.remove(ENDPOINTS.eventById(eventId));
+    return success({ deleted: true, event_id: eventId, http_status: status, event: identity });
+  } catch (err) {
+    return error(`Failed to delete event: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }

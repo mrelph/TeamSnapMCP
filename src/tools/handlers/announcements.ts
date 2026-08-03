@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { teamsnapClient } from "../../api/client.js";
 import { ENDPOINTS } from "../../api/endpoints.js";
 import { localizeTime } from "../../utils/time.js";
-import { buildTemplate, checkIdempotency, storeIdempotency, requireConfirm } from "../../utils/writeSafety.js";
+import { buildTemplate, checkIdempotency, storeIdempotency, requireConfirm, idempotencyScope } from "../../utils/writeSafety.js";
 import { success, error, requireString, getViewerTZ, type ToolArgs } from "./common.js";
 
 function normalize(
@@ -91,7 +91,8 @@ export async function handleSendTeamMessage(args: ToolArgs): Promise<CallToolRes
     });
   }
 
-  const cached = checkIdempotency(idempotencyKey);
+  const scope = idempotencyScope("teamsnap_send_team_message", teamId, fields);
+  const cached = checkIdempotency(scope, idempotencyKey);
   if (cached) {
     return success({ idempotent_replay: true, result: cached });
   }
@@ -108,7 +109,7 @@ export async function handleSendTeamMessage(args: ToolArgs): Promise<CallToolRes
       body: created.message ?? created.body ?? body,
       sent_at: created.created_at ?? null,
     };
-    storeIdempotency(idempotencyKey, result);
+    storeIdempotency(scope, idempotencyKey, result);
     return success(result);
   } catch (err) {
     return error(`Failed to send team message: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -161,7 +162,8 @@ export async function handleSendAnnouncement(args: ToolArgs): Promise<CallToolRe
     });
   }
 
-  const cached = checkIdempotency(idempotencyKey);
+  const scope = idempotencyScope("teamsnap_send_announcement", `${channel}/${teamId}`, fields);
+  const cached = checkIdempotency(scope, idempotencyKey);
   if (cached) {
     return success({ idempotent_replay: true, result: cached });
   }
@@ -180,7 +182,7 @@ export async function handleSendAnnouncement(args: ToolArgs): Promise<CallToolRe
       sent_at: created.created_at ?? null,
       recipient_count: recipientIds?.length ?? null,
     };
-    storeIdempotency(idempotencyKey, result);
+    storeIdempotency(scope, idempotencyKey, result);
     return success(result);
   } catch (err) {
     return error(`Failed to send announcement: ${err instanceof Error ? err.message : "Unknown error"}`);

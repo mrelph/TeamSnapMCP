@@ -4,9 +4,9 @@ A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that co
 
 ## Features
 
-- **21 read tools** — teams, rosters, events, availability, locations, contacts, announcements, assignments, opponents, standings, stats, forums, calendars, and custom fields
-- **8 write tools** — set RSVPs, create/update/cancel events, create and assign tracked items (snacks, volunteers, carpools), send team messages, and send broadcast email/push announcements
-- **Safety rails on every write** — `preview: true` by default returns the payload without calling TeamSnap; destructive writes additionally require `confirm: true`; POST tools support an optional `idempotency_key`. See [Write Tools & Safety](#write-tools--safety).
+- **22 read tools** — teams, rosters, events, availability, locations, contacts, announcements, assignments, opponents, standings, stats, forums, calendars, custom fields, and your own per-team permissions
+- **9 write tools** — set RSVPs, create/update/cancel/delete events, create and assign tracked items (snacks, volunteers, carpools), send team messages, and send broadcast email/push announcements
+- **Safety rails on every write** — `preview: true` by default returns the payload without calling TeamSnap; destructive writes additionally require `confirm: true`; write tools support an optional `idempotency_key`, scoped by tool, target and payload. See [Write Tools & Safety](#write-tools--safety).
 - **Localized event times** — events always returned in their own timezone; optional viewer-timezone field for travel
 - **Secure** — OAuth 2.0 with AES-256-GCM encrypted local storage or DynamoDB
 - **Flexible Deployment** — Run locally, via npx, or on AWS Lambda
@@ -154,6 +154,7 @@ A browser window will open for OAuth login. Once you authorize, you're connected
 | `teamsnap_get_forum_posts` | Posts in a forum topic | `topic_id` |
 | `teamsnap_get_calendar_urls` | iCal/webcal feeds (all or games-only) | `team_id` |
 | `teamsnap_get_custom_data` | League/team custom field values | `team_id` or `member_id` |
+| `teamsnap_whoami_members` | Which teams you're a manager/owner on, and your member id per team | — |
 | `teamsnap_set_availability` | Set a member's RSVP for an event (preview by default) | `event_id`, `member_id`, `status` |
 | `teamsnap_update_tracked_item_status` | Update a tracked-item status (preview by default) | `tracked_item_status_id`, `status` |
 | `teamsnap_create_tracked_item` | Create a snack/volunteer/carpool tracked item (preview by default) | `team_id`, `name` |
@@ -162,6 +163,7 @@ A browser window will open for OAuth login. Once you authorize, you're connected
 | `teamsnap_update_event` | Update or cancel an event; confirm required for cancel | `event_id`, `patch` |
 | `teamsnap_send_team_message` | Post an in-app team message (preview by default) | `team_id`, `body` |
 | `teamsnap_send_announcement` | Send an email/alert broadcast; confirm required to send | `team_id`, `channel`, `subject`, `body` |
+| `teamsnap_delete_event` | Permanently delete an event; requires confirm | `event_id` |
 
 ### Availability Status Codes
 
@@ -178,11 +180,13 @@ The `teamsnap_get_availability` tool groups members into four categories based o
 
 ## Write Tools & Safety
 
-Phase 2 added 8 write tools that can modify TeamSnap data. They follow consistent safety rails:
+There are 9 write tools that can modify TeamSnap data. They follow consistent safety rails:
 
 - **`preview: true` by default.** Every write tool returns the payload it *would* send without actually calling TeamSnap, so you can inspect first. Pass `preview: false` to commit.
-- **`confirm: true` for destructive actions.** `teamsnap_send_announcement` always requires it; `teamsnap_update_event` requires it only when the patch sets `is_canceled: true`.
-- **`idempotency_key` for POST tools.** Optional 60-second in-memory dedup cache keyed on the value you supply. Best-effort on Lambda (short function lifetime).
+- **`confirm: true` for destructive actions.** `teamsnap_send_announcement` always requires it; `teamsnap_delete_event` always requires it; `teamsnap_update_event` requires it only when the patch sets `is_canceled: true`.
+- **`confirm` authorizes, `preview: false` executes.** They are independent — passing `confirm: true` alone still only previews.
+- **Deleting vs cancelling.** `teamsnap_delete_event` is permanent and cannot be undone through this server. To call a game off while keeping it on the schedule, use `teamsnap_update_event` with `is_canceled: true`.
+- **`idempotency_key` for the POST-style write tools** (`teamsnap_create_event`, `teamsnap_create_tracked_item`, `teamsnap_assign_tracked_item`, `teamsnap_send_team_message`, `teamsnap_send_announcement`). Optional 60-second in-memory dedup cache. The key you supply is scoped by tool, target resource and payload, so reusing the same key for a different member (or a different tool) re-executes rather than replaying an unrelated result. Only a genuine retry — same tool, same target, same payload — dedupes. Best-effort on Lambda (short function lifetime).
 - **Re-authentication.** If you authenticated before Phase 2, your existing token has `read` scope only. Your first write will return `reauthentication_required` — just run `teamsnap_auth` again to get a `read write` token. Reads continue to work throughout.
 
 ### Example: preview → commit flow
