@@ -20,10 +20,10 @@ A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that co
 
 ### 1. Get TeamSnap OAuth Credentials
 
-1. Go to [TeamSnap Developer Portal](https://developer.teamsnap.com)
-2. Create a new application
-3. Set the redirect URI (see deployment options below)
-4. Note your **Client ID** and **Client Secret**
+1. Go to [TeamSnap Developer Portal](https://auth.teamsnap.com)
+3. Create a new application
+4. Set the redirect URI (see deployment options below)
+5. Note your **Client ID** and **Client Secret**
 
 ### 2. Choose Your Deployment
 
