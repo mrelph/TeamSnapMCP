@@ -14,7 +14,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that co
 ## Prerequisites
 
 - Node.js >= 18
-- A [TeamSnap Developer](https://developer.teamsnap.com) OAuth application (Client ID + Secret)
+- A [TeamSnap Developer](https://auth.teamsnap.com) OAuth application (Client ID + Secret)
 
 ## Quick Start
 
