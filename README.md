@@ -5,8 +5,8 @@ A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that co
 ## Features
 
 - **21 read tools** — teams, rosters, events, availability, locations, contacts, announcements, assignments, opponents, standings, stats, forums, calendars, and custom fields
-- **8 write tools** — set RSVPs, create/update/cancel events, create and assign tracked items (snacks, volunteers, carpools), send team messages, and send broadcast email/push announcements
-- **Safety rails on every write** — `preview: true` by default returns the payload without calling TeamSnap; destructive writes additionally require `confirm: true`; POST tools support an optional `idempotency_key`. See [Write Tools & Safety](#write-tools--safety).
+- **9 write tools** — set RSVPs, create/update/cancel/delete events, create and assign tracked items (snacks, volunteers, carpools), send team messages, and send broadcast email/push announcements
+- **Safety rails on every write** — `preview: true` by default returns the payload without writing to TeamSnap; destructive writes additionally require `confirm: true`; POST tools support an optional `idempotency_key`. See [Write Tools & Safety](#write-tools--safety).
 - **Localized event times** — events always returned in their own timezone; optional viewer-timezone field for travel
 - **Secure** — OAuth 2.0 with AES-256-GCM encrypted local storage or DynamoDB
 - **Flexible Deployment** — Run locally, via npx, or on AWS Lambda
@@ -158,8 +158,9 @@ A browser window will open for OAuth login. Once you authorize, you're connected
 | `teamsnap_update_tracked_item_status` | Update a tracked-item status (preview by default) | `tracked_item_status_id`, `status` |
 | `teamsnap_create_tracked_item` | Create a snack/volunteer/carpool tracked item (preview by default) | `team_id`, `name` |
 | `teamsnap_assign_tracked_item` | Assign a tracked item to a member (preview by default) | `tracked_item_id`, `member_id` |
-| `teamsnap_create_event` | Create a new event (preview by default) | `team_id`, `name`, `start_date` |
-| `teamsnap_update_event` | Update or cancel an event; confirm required for cancel | `event_id`, `patch` |
+| `teamsnap_create_event` | Create game/event; optional native schedule notification (preview by default) | `team_id`, `name`, `start_date` |
+| `teamsnap_update_event` | Update/cancel or change game/TBD flags; confirm required for cancel/notifications | `event_id`, `patch` |
+| `teamsnap_delete_event` | Delete one exact event after checking expected team; never a whole series | `event_id`, `team_id` |
 | `teamsnap_send_team_message` | Post an in-app team message (preview by default) | `team_id`, `body` |
 | `teamsnap_send_announcement` | Send an email/alert broadcast; confirm required to send | `team_id`, `channel`, `subject`, `body` |
 
@@ -178,12 +179,32 @@ The `teamsnap_get_availability` tool groups members into four categories based o
 
 ## Write Tools & Safety
 
-Phase 2 added 8 write tools that can modify TeamSnap data. They follow consistent safety rails:
+The server exposes 9 write tools that can modify TeamSnap data. They follow consistent safety rails:
 
-- **`preview: true` by default.** Every write tool returns the payload it *would* send without actually calling TeamSnap, so you can inspect first. Pass `preview: false` to commit.
-- **`confirm: true` for destructive actions.** `teamsnap_send_announcement` always requires it; `teamsnap_update_event` requires it only when the patch sets `is_canceled: true`.
+- **`preview: true` by default.** Every write tool returns the payload it *would* send without writes or notifications (deletion previews read TeamSnap to verify the exact target), so you can inspect first. Pass `preview: false` to commit.
+- **`confirm: true` for destructive actions.** `teamsnap_send_announcement` and `teamsnap_delete_event` always require it; `teamsnap_update_event` requires it for cancellation. Create/update/delete with `notify_team: true` also require it. These are tool safeguards, not a requirement to ask for human approval again when the exact action is already authorized.
 - **`idempotency_key` for POST tools.** Optional 60-second in-memory dedup cache keyed on the value you supply. Best-effort on Lambda (short function lifetime).
 - **Re-authentication.** If you authenticated before Phase 2, your existing token has `read` scope only. Your first write will return `reauthentication_required` — just run `teamsnap_auth` again to get a `read write` token. Reads continue to work throughout.
+
+### Native schedule notifications and deletion
+
+- `teamsnap_create_event` and `teamsnap_update_event` accept top-level `notify_team` (default **false**) and `notify_team_as_member_id`. The latter is the sending **team-member ID**, not the account/user ID, and is required when notifying. Do not place notification controls inside `patch`.
+- Creation uses `is_game: true` for games; `is_tbd` is accepted on create and in update patches. These are independent flags: a TBD placeholder may already be a game.
+- `notify_team: true` requests TeamSnap's **native schedule-change notification**, not a separate `teamsnap_send_announcement` broadcast. It requires `preview: false` and `confirm: true` to commit. Results distinguish `status: "preview"`, `"blocked"`, or `"committed"` and report notification request intent, **not verified recipient delivery**. Recipient settings and provider behavior still apply.
+- `teamsnap_delete_event` requires exact numeric `event_id` and expected `team_id`. Preview reads the event and returns its localized target summary; commit re-reads and validates both IDs. It sends a Collection+JSON DELETE body with `repeating_include: "none"`, so only that occurrence is removed. Deletion is not cancellation; associated availability responses are lost, and replacements have new IDs/RSVPs. No automatic replacement, rollback, or series deletion is provided.
+- Deletion also accepts the same native notification options. Cancellation remains `teamsnap_update_event` with `patch.is_canceled: true`; confirmation is still required whether or not notification is requested. An explicit `notify_team: false` records the request choice, not proof that TeamSnap suppresses every independent provider reminder or notification.
+- Both remote bridges retry only known reads and previews. **Committed writes are attempted once** after ambiguous failures; notification-bearing PATCH calls are not safely replayable. An error after submission means the outcome may be unknown: inspect the current schedule before resubmitting. POST `idempotency_key` remains only a short-lived, process-local aid, not an exactly-once guarantee. Event-create keys are bound to team and payload; reusing a live key for changed event fields is rejected.
+
+Examples (each defaults to preview; add `preview: false, confirm: true` only for an authorized commit):
+
+```json
+{"tool":"teamsnap_create_event","arguments":{"team_id":"456","name":"Away game","is_game":true,"is_tbd":false,"start_date":"2027-01-23T18:00:00Z","opponent_id":"321","location_id":"654","notify_team":true,"notify_team_as_member_id":"789"}}
+{"tool":"teamsnap_update_event","arguments":{"event_id":"123","patch":{"is_tbd":false,"start_date":"2027-01-23T18:00:00Z"},"notify_team":true,"notify_team_as_member_id":"789"}}
+{"tool":"teamsnap_delete_event","arguments":{"event_id":"123","team_id":"456","notify_team":false}}
+{"tool":"teamsnap_update_event","arguments":{"event_id":"123","patch":{"is_canceled":true},"notify_team":false}}
+```
+
+The notification sender and DELETE-body contracts follow TeamSnap's official SDK: [events](https://github.com/teamsnap/teamsnap-javascript-sdk/blob/main/src/collections/events.coffee), [model](https://github.com/teamsnap/teamsnap-javascript-sdk/blob/main/src/model.coffee). Development qualification uses mocked writes; it does not establish live delivery.
 
 ### Example: preview → commit flow
 

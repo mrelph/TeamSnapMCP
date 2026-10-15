@@ -71,6 +71,9 @@ export class TeamSnapCore {
       throw new Error(`TeamSnap API error (${response.status}): ${detail}`);
     }
 
+    // DELETE commonly succeeds with 204 (or an empty 200). Do not turn a
+    // committed deletion into a JSON parse failure that invites a retry.
+    if (options.method === "DELETE") return undefined as T;
     return response.json() as Promise<T>;
   }
 
@@ -110,5 +113,14 @@ export class TeamSnapCore {
       throw new Error(`Write to ${endpoint} succeeded (${method}) but returned no item`);
     }
     return parseCollectionItem(first);
+  }
+
+  async delete(endpoint: string, params: Record<string, string | boolean>): Promise<void> {
+    // Match the official SDK: deletion parameters are a Collection+JSON body.
+    await this.request<void>(endpoint, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template: { data: Object.entries(params).map(([name, value]) => ({ name, value })) } }),
+    });
   }
 }

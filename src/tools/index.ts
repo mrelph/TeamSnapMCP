@@ -297,13 +297,14 @@ export const tools: Tool[] = [
   {
     name: "teamsnap_create_event",
     description:
-      "Create a new event (game, practice, meeting). Returns the created event with localized times. Preview by default.",
+      "Create a game (is_game: true), practice, or meeting. Preview by default. notify_team requests native schedule notifications, NOT a separate announcement; notified commits require confirm: true and notify_team_as_member_id. Delivery is not verified.",
     inputSchema: {
       type: "object" as const,
       properties: {
         team_id: { type: "string" },
         name: { type: "string" },
         is_game: { type: "boolean", description: "Game vs practice/other" },
+        is_tbd: { type: "boolean", description: "Whether the game/event time is TBD" },
         start_date: { type: "string", description: "ISO 8601 UTC start time" },
         duration_in_minutes: { type: "number" },
         location_id: { type: "string" },
@@ -311,6 +312,9 @@ export const tools: Tool[] = [
         notes: { type: "string" },
         uniform: { type: "string" },
         arrival_minutes_early: { type: "number" },
+        notify_team: { type: "boolean", default: false, description: "Request native TeamSnap schedule notifications; no separate broadcast" },
+        notify_team_as_member_id: { type: "string", description: "Sending team-member ID (not user ID); required when notify_team is true" },
+        confirm: { type: "boolean", description: "Required to commit when notify_team is true" },
         idempotency_key: { type: "string", description: "Optional 60s dedup key" },
         preview: { type: "boolean", description: "If true (default), return the payload without posting" },
       },
@@ -320,7 +324,7 @@ export const tools: Tool[] = [
   {
     name: "teamsnap_update_event",
     description:
-      "Update an existing event via a patch object. Non-destructive fields (name, start_date, location_id, duration_in_minutes, notes, uniform, opponent_id, minutes_to_arrive_early) update freely. Setting is_canceled: true requires confirm: true because it notifies the team.",
+      "Update an event, convert game/TBD flags, or mark it canceled (not deleted). Preview by default. Cancellation and notified commits require confirm: true. Native notification controls are top-level, not patch fields; delivery is not verified.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -328,12 +332,31 @@ export const tools: Tool[] = [
         patch: {
           type: "object",
           description:
-            "Object of fields to update. Supported keys: name, start_date, location_id, duration_in_minutes, notes, uniform, opponent_id, minutes_to_arrive_early, is_canceled.",
+            "Object of fields to update. Supported keys: name, start_date, location_id, duration_in_minutes, notes, uniform, opponent_id, minutes_to_arrive_early, is_canceled, is_game, is_tbd. Notification controls belong at top level, not inside patch.",
         },
         preview: { type: "boolean", description: "If true (default), return the payload without patching" },
-        confirm: { type: "boolean", description: "Required when patch.is_canceled is true" },
+        notify_team: { type: "boolean", default: false, description: "Request native schedule notification for this update; no separate broadcast" },
+        notify_team_as_member_id: { type: "string", description: "Sending team-member ID (not user ID); required when notify_team is true" },
+        confirm: { type: "boolean", description: "Required for cancellation or notify_team: true commits" },
       },
       required: ["event_id", "patch"],
+    },
+  },
+  {
+    name: "teamsnap_delete_event",
+    description:
+      "Permanently delete ONE game/event, not mark it canceled. Requires event_id and expected team_id; reads the target for preview and rechecks it on commit. Never deletes a recurring series. Associated RSVPs are lost. Preview by default; commit requires preview: false and confirm: true. Optional native notification requests do not prove delivery.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        event_id: { type: "string", pattern: "^[0-9]+$", description: "Exact event ID to delete" },
+        team_id: { type: "string", pattern: "^[0-9]+$", description: "Expected owning team ID; mismatch blocks deletion" },
+        notify_team: { type: "boolean", default: false, description: "Request native deletion notification" },
+        notify_team_as_member_id: { type: "string", description: "Sending team-member ID (not user ID); required when notify_team is true" },
+        preview: { type: "boolean", description: "Default true: reads target but performs no writes or notifications" },
+        confirm: { type: "boolean", description: "Required for every deletion commit" },
+      },
+      required: ["event_id", "team_id"],
     },
   },
   {
