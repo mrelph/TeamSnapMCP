@@ -30,7 +30,7 @@ Restart Claude Desktop. The bridge connects automatically.
 
 ## How It Works
 
-`teamsnap-mcp` runs as a local stdio MCP server. It receives JSON-RPC requests from Claude Desktop over stdin, forwards them to your AWS Lambda endpoint via HTTPS, and pipes responses back over stdout. Includes automatic retry logic (3 attempts with exponential backoff) to handle Lambda cold starts and transient failures.
+`teamsnap-mcp` runs as a local stdio MCP server. It receives JSON-RPC requests from Claude Desktop over stdin, forwards them to your AWS Lambda endpoint via HTTPS, and pipes responses back over stdout. Known reads and previews use up to 3 attempts for Lambda cold starts and transient failures. Committed writes are never automatically replayed after ambiguous failures; inspect TeamSnap before resubmitting, since the original request may have committed.
 
 ### Authentication in AWS Mode
 
@@ -42,9 +42,9 @@ The `teamsnap_get_availability` tool returns member RSVP status grouped into fou
 
 ## Write Tools
 
-In addition to 21 read tools, the server exposes 8 write tools: `teamsnap_set_availability`, `teamsnap_update_tracked_item_status`, `teamsnap_create_tracked_item`, `teamsnap_assign_tracked_item`, `teamsnap_create_event`, `teamsnap_update_event`, `teamsnap_send_team_message`, and `teamsnap_send_announcement`.
+In addition to 21 read tools, the server exposes 9 write tools: `teamsnap_set_availability`, `teamsnap_update_tracked_item_status`, `teamsnap_create_tracked_item`, `teamsnap_assign_tracked_item`, `teamsnap_create_event`, `teamsnap_update_event`, `teamsnap_delete_event`, `teamsnap_send_team_message`, and `teamsnap_send_announcement`.
 
-Every write tool has `preview: true` by default — the first call returns the payload that *would* be sent to TeamSnap without actually sending it, so you can inspect before committing. Pass `preview: false` to execute the write. Destructive writes (sending announcements, cancelling events) additionally require `confirm: true`.
+Every write tool has `preview: true` by default — the first call returns the payload that *would* be sent to TeamSnap without writes or notifications; deletion preview may read TeamSnap to validate the target, so you can inspect before committing. Pass `preview: false` to execute the write. Destructive writes (sending announcements, canceling or deleting events) additionally require `confirm: true`. Native schedule notifications on create/update/delete use `notify_team: true` plus the sending `notify_team_as_member_id` and also require confirmation. This requests delivery; it does not verify receipt. Deletion requires both event and expected team IDs and removes one occurrence only, including its availability responses. See the server README for examples and unknown-outcome recovery.
 
 ### Re-authentication on upgrade
 

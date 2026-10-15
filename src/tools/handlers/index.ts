@@ -9,6 +9,7 @@ import {
   handleGetLocation,
   handleCreateEvent,
   handleUpdateEvent,
+  handleDeleteEvent,
 } from "./events.js";
 import { handleGetAvailability, handleSetAvailability } from "./availability.js";
 import { handleGetCalendarUrls, handleGetCustomData } from "./meta.js";
@@ -81,9 +82,11 @@ export async function handleToolCall(name: string, args: ToolArgs): Promise<Call
       case "teamsnap_assign_tracked_item":
         return handleAssignTrackedItem(args);
       case "teamsnap_create_event":
-        return handleCreateEvent(args);
+        return await handleCreateEvent(args);
       case "teamsnap_update_event":
-        return handleUpdateEvent(args);
+        return await handleUpdateEvent(args);
+      case "teamsnap_delete_event":
+        return await handleDeleteEvent(args);
       case "teamsnap_send_team_message":
         return handleSendTeamMessage(args);
       case "teamsnap_send_announcement":

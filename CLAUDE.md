@@ -1,6 +1,6 @@
 # TeamSnap MCP Server
 
-Model Context Protocol server exposing TeamSnap (teams, rosters, events, RSVPs, tracked items, announcements) as tools for Claude. TypeScript, ESM, Node >= 18. 21 read tools + 8 write tools.
+Model Context Protocol server exposing TeamSnap (teams, rosters, events, RSVPs, tracked items, announcements) as tools for Claude. TypeScript, ESM, Node >= 18. 21 read tools + 9 write tools.
 
 ## Commands
 
@@ -24,7 +24,7 @@ AWS package (separate, in `aws/`, run `npm install` there first):
 - `src/tools/handlers/index.ts` — `handleToolCall(name, args)` is one big `switch` mapping tool name → handler. Handlers live in `src/tools/handlers/*.ts` grouped by domain (auth, teams, roster, events, availability, assignments, announcements, opponents, stats, forum, meta).
 - `src/api/` — `core.ts` (`TeamSnapCore.request`, Collection+JSON parsing, token refresh), `client.ts`, `endpoints.ts` (`API_BASE=https://api.teamsnap.com/v3`, `TOKEN_URL=https://auth.teamsnap.com/oauth/token`), `types.ts`.
 - `src/auth/oauth.ts` — OAuth 2.0 flow. `src/utils/storage.ts` — AES-256-GCM encrypted local token store (scrypt key from machine/USER + salt, files written `0600`).
-- `src/wrapper.ts` — thin stdio client that forwards to the AWS-hosted server via `TEAMSNAP_MCP_ENDPOINT`; has cold-start retry logic.
+- `src/utils/remoteMcp.ts` (mirrored in the standalone bridge package) owns conservative retry classification. `src/wrapper.ts` — thin stdio client that forwards to the AWS-hosted server via `TEAMSNAP_MCP_ENDPOINT`; has cold-start retry logic only for known reads/previews; committed writes are not automatically replayed. See README for uncertain-outcome recovery.
 - `aws/src/lambda.ts` — Lambda handler (HTTP/JSON-RPC over API Gateway), `dynamodb.ts` for token storage.
 
 ## Conventions
@@ -36,7 +36,7 @@ AWS package (separate, in `aws/`, run `npm install` there first):
 ## Gotchas
 
 - **Two transports for the same tools:** local = stdio server (`index.ts`); AWS = stdio `wrapper.ts` → API Gateway → Lambda (JSON-RPC). Keep both in mind when changing tool behavior.
-- **Write-tool safety rails:** every write tool is `preview: true` by default (returns payload, no API call). `teamsnap_send_announcement` always needs `confirm: true`; `teamsnap_update_event` needs `confirm: true` only when `patch.is_canceled` is true. POST tools accept optional 60s in-memory `idempotency_key`. See `src/utils/writeSafety.ts`.
+- **Write-tool safety rails:** every write tool is `preview: true` by default (returns payload, no writes/notifications; deletion preview reads/validates the target). `teamsnap_send_announcement` always needs `confirm: true`; `teamsnap_delete_event` requires confirmation and checks exact event/team IDs for single-occurrence deletion; `teamsnap_update_event` needs confirmation for cancellation. Notified create/update/delete require `notify_team_as_member_id` and confirmation. Native notifications are requested, not receipt-verified. POST tools accept optional 60s in-memory `idempotency_key`. See `src/utils/writeSafety.ts`.
 - **OAuth scope:** `read write` requested. Tokens issued before write support have `read` only → first write returns `reauthentication_required`; re-run `teamsnap_auth`.
 - **Availability status codes:** TeamSnap `status_code` uses numeric `0` for "no" (falsy). Use `??`, never `||`, when reading it.
 - **Local OAuth callback** needs an HTTPS redirect (tunnel, e.g. cloudflared) on port `8374` (`TEAMSNAP_CALLBACK_PORT`); AWS deploy gives a permanent API Gateway callback instead.

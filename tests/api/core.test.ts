@@ -75,3 +75,34 @@ describe("TeamSnapCore.request", () => {
     expect(result[0].id).toBe(1);
   });
 });
+
+describe("TeamSnapCore.delete", () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => { globalThis.fetch = originalFetch; });
+  it.each([204, 200])("accepts empty %i success and sends a single-occurrence DELETE template", async (status) => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response(null, { status }));
+    await expect(makeCore().delete("/events/123", { repeating_include: "none", notify_team: false })).resolves.toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+    const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe("https://api.teamsnap.com/v3/events/123");
+    expect(options.method).toBe("DELETE");
+    expect(options.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(options.body)).toEqual({ template: { data: [
+      { name: "repeating_include", value: "none" }, { name: "notify_team", value: false },
+    ] } });
+  });
+  it.each([403, 404])("preserves structured %i errors", async (status) => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response(JSON.stringify({ collection: { error: { title: "Denied", message: "No access" } } }), { status }));
+    await expect(makeCore().delete("/events/123", {})).rejects.toThrow(`TeamSnap API error (${status}): Denied: No access`);
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+  });
+  it("does not retry network failures", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("lost response"));
+    await expect(makeCore().delete("/events/123", {})).rejects.toThrow("lost response");
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+  });
+  it("does not accept empty successful collection reads", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await expect(makeCore().searchMany("/events/search")).rejects.toThrow();
+  });
+});
