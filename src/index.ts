@@ -10,6 +10,8 @@ import {
 import { tools } from "./tools/index.js";
 import { handleToolCall } from "./tools/handlers/index.js";
 
+import { isToolAllowed } from "./utils/readOnly.js";
+
 const server = new Server(
   {
     name: "teamsnap-mcp",
@@ -24,12 +26,15 @@ const server = new Server(
 
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools };
+  return { tools: tools.filter((tool) => isToolAllowed(tool.name)) };
 });
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  if (!isToolAllowed(name)) {
+    return { isError: true, content: [{ type: "text", text: "Read-only mode does not allow this tool." }] };
+  }
   return handleToolCall(name, (args as Record<string, unknown>) || {});
 });
 

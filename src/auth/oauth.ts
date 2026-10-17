@@ -45,8 +45,7 @@ async function exchangeCodeForToken(
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Token exchange failed: ${text}`);
+    throw new Error(`Token exchange failed (HTTP ${response.status})`);
   }
 
   return response.json() as Promise<TokenResponse>;
@@ -74,27 +73,17 @@ export async function startOAuthFlow(config: OAuthConfig): Promise<{
         const returnedState = url.searchParams.get("state");
         const error = url.searchParams.get("error");
 
-        if (error) {
-          res.writeHead(400);
-          res.end(`
-            <html>
-              <body style="font-family: system-ui; text-align: center; padding: 50px;">
-                <h1>Authentication Failed</h1>
-                <p>Error: ${error}</p>
-                <p>You can close this window.</p>
-              </body>
-            </html>
-          `);
-          server.close();
-          reject(new Error(`OAuth error: ${error}`));
+        if (returnedState !== state) {
+          res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("State mismatch - possible CSRF attack");
           return;
         }
 
-        if (returnedState !== state) {
-          res.writeHead(400);
-          res.end("State mismatch - possible CSRF attack");
+        if (error) {
+          res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Authentication was not completed. You can close this window.");
           server.close();
-          reject(new Error("State mismatch"));
+          reject(new Error("OAuth authorization was not completed"));
           return;
         }
 
@@ -147,30 +136,27 @@ export async function startOAuthFlow(config: OAuthConfig): Promise<{
           server.close();
           resolve(credentials);
         } catch (err) {
-          res.writeHead(500);
-          res.end(`
-            <html>
-              <body style="font-family: system-ui; text-align: center; padding: 50px;">
-                <h1 style="color: #ef4444;">Authentication Failed</h1>
-                <p>${err instanceof Error ? err.message : "Unknown error"}</p>
-                <p>Please try again.</p>
-              </body>
-            </html>
-          `);
+          res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Authentication failed. Please try again.");
           server.close();
           reject(err);
         }
       });
 
-      server.listen(OAUTH_CALLBACK_PORT, () => {
+      server.on("error", (error) => {
+        clearTimeout(deadline);
+        reject(error);
+      });
+      server.listen(OAUTH_CALLBACK_PORT, "127.0.0.1", () => {
         // Server is ready
       });
 
       // Timeout after 5 minutes
-      setTimeout(() => {
+      const deadline = setTimeout(() => {
         server.close();
         reject(new Error("OAuth flow timed out after 5 minutes"));
       }, 5 * 60 * 1000);
+      server.once("close", () => clearTimeout(deadline));
     });
   };
 

@@ -44,9 +44,9 @@ export async function handleAuthStatus(): Promise<CallToolResult> {
     });
   } catch {
     return success({
-      authenticated: true,
-      user: { id: credentials.teamsnapUserId, email: credentials.teamsnapEmail },
-      note: "Could not fetch fresh user info - token may need refresh",
+      authenticated: null,
+      credentialPresent: true,
+      note: "Could not verify current access. A fresh authenticated read is required before reporting connection health.",
     });
   }
 }

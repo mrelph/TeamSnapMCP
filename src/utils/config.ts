@@ -15,5 +15,10 @@ export const OAUTH_CALLBACK_PORT = parseInt(process.env.TEAMSNAP_CALLBACK_PORT |
 // If not set, falls back to localhost
 export const OAUTH_REDIRECT_URI = process.env.TEAMSNAP_REDIRECT_URI || `http://localhost:${OAUTH_CALLBACK_PORT}/callback`;
 
-// Scopes we request from TeamSnap
-export const TEAMSNAP_SCOPES = "read write";
+// Read-only mode is opt-in; preserve existing write-capable installations.
+const readOnlySetting = process.env.TEAMSNAP_READ_ONLY;
+if (readOnlySetting !== undefined && readOnlySetting !== "true" && readOnlySetting !== "false") {
+  throw new Error("TEAMSNAP_READ_ONLY must be true or false");
+}
+export const TEAMSNAP_READ_ONLY = readOnlySetting === "true";
+export const TEAMSNAP_SCOPES = TEAMSNAP_READ_ONLY ? "read" : "read write";

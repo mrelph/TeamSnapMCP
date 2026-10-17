@@ -274,3 +274,20 @@ node scripts/deploy.cjs # Deploy to AWS
 ## License
 
 MIT
+
+### Local read-only mode
+
+Set `TEAMSNAP_READ_ONLY=true` before starting the local stdio server to request only
+OAuth `read` access. Read tools and authentication/logout remain available; write
+tools are omitted from discovery and rejected at dispatch, even with a previously
+issued write-capable token. Existing installations retain `read write` scope and
+write tools unless this option is enabled. Only `true` and `false` are accepted.
+This option applies to the local server, not the separately deployed AWS transport.
+Changing OAuth scopes requires explicit user reauthorization; enabling this option
+does not revoke an existing token. It does not add support for TeamSnap ONE teams
+that are unavailable through API v3.
+
+Local OAuth callbacks bind to loopback, reject invalid state before handling errors,
+and do not reflect provider error bodies. Authentication status remains unknown if
+a saved credential cannot complete a current API read. Client credential reloads
+also apply to the resource methods used after initial server startup.
